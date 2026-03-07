@@ -1,6 +1,7 @@
 # NativeAOT dotnet-install ![Build](https://github.com/WeihanLi/dotnet-install/actions/workflows/build.yml/badge.svg)
 
-This repository now contains a managed prototype for the `dotnet-install` script.
+This repository now contains a managed prototype for the [dotnet install script](https://github.com/dotnet/install-scripts).
+
 The `src/DotNetInstallManager` project:
 
 - Targets `net10.0` with NativeAOT-friendly settings (PublishAot, trimming-ready properties, invariant globalization).
@@ -23,8 +24,3 @@ cd C:\projects\source\dotnet-install-script
 ```
 
 `InstallOrchestrator` currently prints a plan summary so we can verify option binding before filling in the networking, extraction, and removal layers.
-
-## Continuous integration
-
-- `Build` workflow validates that `DotNetInstallManager.slnx` restores and builds on every push/PR targeting `main`.
-- `Release NativeAOT Artifacts` workflow (manual or release-driven) publishes NativeAOT binaries for `win-x64`, `linux-x64`, and `osx-arm64`, uploads them as workflow artifacts, and attaches them to GitHub releases using the tag name for versioning.

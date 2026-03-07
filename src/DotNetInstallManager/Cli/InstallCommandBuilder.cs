@@ -64,9 +64,9 @@ internal static class InstallCommandBuilder
         {
             var version = result.GetValue(versionOption);
             var quality = result.GetValue(qualityOption);
-            if (!string.IsNullOrWhiteSpace(quality) && !string.Equals(version, "Latest", StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(quality) && !string.Equals(version, "latest", StringComparison.OrdinalIgnoreCase))
             {
-                result.AddError("Quality and Version options cannot be combined. Use --version Latest to pair with --quality.");
+                result.AddError("Quality and Version options cannot be combined. Use --version latest to pair with --quality.");
             }
         });
 
@@ -76,7 +76,7 @@ internal static class InstallCommandBuilder
             var options = BindOptions(parseResult);
             var output = parseResult.InvocationConfiguration.Output ?? Console.Out;
             var error = parseResult.InvocationConfiguration.Error ?? Console.Error;
-            var exitCode = await orchestrator.ExecuteAsync(options, output, error, linkedCts.Token).ConfigureAwait(false);
+            var exitCode = await orchestrator.ExecuteAsync(options, output, error, linkedCts.Token);
             return exitCode;
         });
 
@@ -142,7 +142,7 @@ internal static class InstallCommandBuilder
                 var removeOptions = BindRemoveOptions(parseResult);
                 var output = parseResult.InvocationConfiguration.Output ?? Console.Out;
                 var error = parseResult.InvocationConfiguration.Error ?? Console.Error;
-                var exitCode = await orchestrator.ExecuteRemovalAsync(removeOptions, output, error, linkedCts.Token).ConfigureAwait(false);
+                var exitCode = await orchestrator.ExecuteRemovalAsync(removeOptions, output, error, linkedCts.Token);
                 return exitCode;
             });
 
