@@ -1,0 +1,78 @@
+name: Release NativeAOT Artifacts
+
+on:
+  release:
+    types: [ published ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Publish ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: windows-latest
+            rid: win-x64
+          - os: macos-latest
+            rid: osx-arm64
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+      DOTNET_MULTILEVEL_LOOKUP: '0'
+      VERSION: ${{ github.event.release.tag_name || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+          cache: true
+
+      - name: Restore
+        run: dotnet restore DotNetInstallManager.slnx
+
+      - name: Publish NativeAOT binary
+        run: >-
+          dotnet publish src/DotNetInstallManager/DotNetInstallManager.csproj
+          --configuration Release
+          --runtime ${{ matrix.rid }}
+          --self-contained true
+          -o "${{ github.workspace }}/artifacts/${{ matrix.rid }}/publish/"
+
+      - name: Pack artifact
+        shell: pwsh
+        run: |
+          $rid = '${{ matrix.rid }}'
+          $version = '${{ env.VERSION }}'
+          $publishDir = Join-Path $Env:GITHUB_WORKSPACE "artifacts/$rid/publish"
+          if (-not (Test-Path $publishDir)) {
+            throw "Publish directory not found: $publishDir"
+          }
+          $archiveDir = Join-Path $Env:GITHUB_WORKSPACE "artifacts/$rid"
+          New-Item -ItemType Directory -Path $archiveDir -Force | Out-Null
+          $archivePath = Join-Path $archiveDir "dotnet-install-$version-$rid.zip"
+          if (Test-Path $archivePath) { Remove-Item $archivePath -Force }
+          Get-ChildItem -Path $publishDir | Compress-Archive -DestinationPath $archivePath
+          Write-Host "Packaged $archivePath"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotnet-install-${{ env.VERSION }}-${{ matrix.rid }}
+          path: artifacts/${{ matrix.rid }}/dotnet-install-${{ env.VERSION }}-${{ matrix.rid }}.zip
+          if-no-files-found: error
+
+      - name: Attach to GitHub release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/${{ matrix.rid }}/dotnet-install-${{ env.VERSION }}-${{ matrix.rid }}.zip
