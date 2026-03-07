@@ -19,7 +19,7 @@ cd C:\projects\source\dotnet-install-script
  dotnet run --project src/DotNetInstallManager -- --help
 
 # remove a specific SDK/runtime (preview implementation)
- dotnet run --project src/DotNetInstallManager -- remove --version 8.0.204
+ dotnet run --project src/DotNetInstallManager -- remove 8.0.204
 ```
 
 `InstallOrchestrator` currently prints a plan summary so we can verify option binding before filling in the networking, extraction, and removal layers.
