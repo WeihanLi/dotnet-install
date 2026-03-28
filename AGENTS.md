@@ -2,105 +2,156 @@
 
 ## Project Overview
 
-**dotnet-install** is a command-line tool for installing .NET SDK as an alternative for dotnet-install script.
+**dotnet-install** is a managed prototype of the `dotnet-install` scripts. It exposes a CLI named `dotnet-install` that resolves .NET release metadata, builds an install plan, and downloads the selected SDK or runtime artifact.
 
-Key capabilities:
+This repository is not feature-complete yet. The current implementation is strongest in these areas:
 
-- Install .NET SDK
+- CLI option binding and validation via `System.CommandLine`
+- Release metadata lookup and install plan generation
+- Artifact download with proxy and feed overrides
+- A preview `remove` command surface
 
-**Technology stack**: C# / .NET 10, `System.CommandLine`, `xunit.v3`.
+These areas are still incomplete or intentionally stubbed:
 
-## Environment Setup
+- Archive extraction and install layout mutation
+- PATH updates
+- Actual SDK/runtime removal logic
+- Full parity with `dotnet-install.sh` and `dotnet-install.ps1`
 
-### Prerequisites
+When changing behavior, prefer aligning with the existing shell scripts in the repository instead of inventing new semantics.
 
-- **.NET 10 SDK** — required (the solution file `.slnx` format is not supported by .NET 8 or older)
+## Technology Stack
+
+- C# / .NET 10
+- `System.CommandLine` 2.0.5
+- xUnit tests executed through `Microsoft.NET.Test.Sdk`
+- NativeAOT-oriented publish settings in the main tool project
+
+## Repository Layout
+
+- `src/DotNetInstallManager/`: application code
+- `src/DotNetInstallManager/Application/`: app startup and host wiring
+- `src/DotNetInstallManager/Cli/`: command and option definitions
+- `src/DotNetInstallManager/Options/`: immutable option models
+- `src/DotNetInstallManager/Services/`: metadata resolution, planning, downloading, orchestration
+- `tests/DotNetInstallManager.Tests/`: unit tests mirroring source areas
+- `dotnet-install.sh` and `dotnet-install.ps1`: reference behavior for the original scripts
+- `artifacts/`: build output; do not edit manually
+
+## Environment Requirements
+
+- .NET 10 SDK is required. The solution uses `.slnx`, which is not supported by older SDKs.
+
+Verify the SDK before doing substantial work:
 
 ```bash
-dotnet --list-sdks      # should show 10.0.x
-dotnet --list-runtimes  # should show Microsoft.NETCore.App 10.0.x
+dotnet --list-sdks
+dotnet --list-runtimes
 ```
 
-## Build Commands
+## Build And Test Commands
+
+Use the solution file at the repository root:
 
 ```bash
-# Build the solution
-dotnet build
-
-# Build with explicit solution file
-dotnet build dotnet-DotNetInstallManager.slnx
-
-# Package the tool as a NuGet package
-dotnet pack src/DotNetInstallManager/DotNetInstallManager.csproj -c Release
-# Output: src/DotNetInstallManager/bin/Release/dotnet-DotNetInstallManager.{version}.nupkg
-
-# Publish AOT binary (Release only)
-dotnet publish src/DotNetInstallManager/DotNetInstallManager.csproj -f net10.0 --use-current-runtime -o dist
+dotnet build DotNetInstallManager.slnx
+dotnet test DotNetInstallManager.slnx
 ```
 
-## Testing Instructions
-
-### Run All Tests
+Useful project-level commands:
 
 ```bash
-dotnet test
-```
-
-### Test Conventions
-
-- Test framework: **xunit**
-- Unit tests are in `tests/DotNetInstallManager.Tests/`, mirroring the `src/DotNetInstallManager/` structure
-
-## Development Workflow
-
-### Run the Application Locally
-
-```bash
-# Show help
 dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- --help
+dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- remove --help
+dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- version
+dotnet pack src/DotNetInstallManager/DotNetInstallManager.csproj -c Release
+dotnet publish src/DotNetInstallManager/DotNetInstallManager.csproj -c Release -f net10.0 --use-current-runtime -o dist
 ```
 
-### Install and Test as a Global Tool
+Notes:
+
+- `dotnet pack` produces the global-tool package for `dotnet-install`
+- `dotnet publish` is the right validation path for publish-related changes
+- Build output goes under `artifacts/` because of the root `Directory.Build.props`
+
+## Architecture Notes
+
+### CLI Layer
+
+- `InstallCommandBuilder` defines the root install flow, the `remove` subcommand, and the `version` subcommand.
+- The built-in `System.CommandLine` `--version` option is deliberately removed so `--version` can mean `.NET version to install`.
+- If you touch command parsing or option aliases, add or update tests in `tests/DotNetInstallManager.Tests/Cli/`.
+
+### Host Layer
+
+- `Program.cs` only handles Ctrl+C cancellation.
+- `DotNetInstallHost` composes the orchestrator and command tree.
+
+### Service Layer
+
+- `InstallPlanBuilder` resolves channels, versions, product kind, RID, and candidate download URLs.
+- `ReleaseMetadataClient` reads the release index and per-channel metadata.
+- `ArtifactDownloader` is responsible for the download step once a plan exists.
+- `InstallOrchestrator` currently prints the plan, downloads the selected asset, and stops short of extraction and installation.
+
+### Current Behavioral Boundaries
+
+- `--dry-run` stops after plan generation.
+- Non-dry-run install currently downloads the archive but does not extract it.
+- `remove` is a planning stub that reports intent; it does not delete installed bits yet.
+
+Document these limitations accurately in code, tests, and docs. Do not claim install or remove completion unless you implemented and verified it.
+
+## Testing Guidance
+
+Run the full test suite after code changes:
+
+```bash
+dotnet test DotNetInstallManager.slnx
+```
+
+Add focused tests when you change:
+
+- command-line options, aliases, or validation rules
+- channel or version selection logic
+- RID normalization or URL rewrite behavior
+- orchestrator output or error handling
+
+Recommended manual checks, depending on the change:
+
+1. `dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- --help`
+2. `dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- remove --help`
+3. `dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- version`
+4. `dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- --dry-run --channel LTS`
+
+If you change packaging or publish behavior, also run:
 
 ```bash
 dotnet pack src/DotNetInstallManager/DotNetInstallManager.csproj -c Release
-dotnet tool install --global --add-source src/DotNetInstallManager/bin/Release dotnet-DotNetInstallManager
-dotnet-install --help
 ```
 
-### Manual Validation Checklist
+## Coding Conventions
 
-After making changes, verify these scenarios:
+Follow the repository's `.editorconfig` and existing source style.
 
-1. **CLI Help**: `dotnet-install --help` — all options display correctly
-2. **Package installation**: global tool installs and `dotnet-install` command responds
+- Use 4 spaces in C# files and 2 spaces in project, XML, and JSON files.
+- Keep braces on new lines.
+- Place `using` directives outside namespaces.
+- Sort `System` usings first.
+- Nullable reference types and implicit usings are enabled.
+- Prefer small, explicit changes over broad refactors.
+- Preserve the current record-based option models and file-scoped namespaces.
 
-## Code Style Guidelines
+Do not assume generated outputs under `artifacts/` should be committed or edited unless the task explicitly requires that.
 
-- **Language**: C# with `LangVersion=preview` (set in `Directory.Build.props`)
-- **Nullable reference types**: enabled everywhere
-- **Implicit usings**: enabled; common WeihanLi.Common namespaces are globally imported
-- **File headers**: every `.cs` file must begin with:
+## Change Guidance For Agents
 
-  ```csharp
-  // Copyright (c) Weihan Li. All rights reserved.
-  // Licensed under the MIT license.
-  ```
-
-- **Namespaces**: file-scoped namespace declarations (`namespace Foo;`)
-- **Primary constructors**: preferred where applicable
-- **`var`**: preferred for all local variable declarations
-- **Indentation**: 4 spaces for C# files, 2 spaces for XML/JSON project files
-- **Newline**: open braces on new lines (`csharp_new_line_before_open_brace = all`)
-- **Sorting**: system `using` directives are **not** sorted first
-- Run `dotnet format` to automatically fix formatting issues
-
-## Pull Request Guidelines
-
-- Target the **`dev`** branch for feature and bug-fix PRs
-- Ensure `dotnet build` and `dotnet test` pass locally before opening a PR
-- The pre-commit hook (`.husky/`) automatically runs `dotnet build`
-- Code formatting is enforced via `dotnet format` — run it before committing
+- Prefer fixing behavior in `src/DotNetInstallManager/` and proving it with tests under `tests/DotNetInstallManager.Tests/`.
+- Use the shell scripts as a behavior reference when implementing install semantics.
+- Keep public CLI names and aliases stable unless the task explicitly changes the command surface.
+- When adding new options, validate interactions in `InstallCommandBuilder` and cover them with parser tests.
+- When changing metadata resolution, cover both success and failure cases.
+- When changing download behavior, consider proxy settings, feed overrides, and timeout handling.
 
 ### Commit Message Convention
 
@@ -140,3 +191,10 @@ chore: bump WeihanLi.Common to 1.0.87
 - Use the **imperative mood** in the description ("add" not "added")
 - Keep the first line at 72 characters or fewer
 - Reference issues in the footer: `Fixes #123` or `Closes #123`
+
+## Pull Request Notes
+
+- The default branch is `main`.
+- Prefer small, reviewable commits.
+- Conventional Commits are a good fit for this repository, for example `fix(cli): validate version and quality combination`.
+- Before opening or updating a PR, ensure `dotnet build DotNetInstallManager.slnx` and `dotnet test DotNetInstallManager.slnx` pass.
