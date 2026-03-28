@@ -36,7 +36,7 @@ internal static class InstallPlanBuilder
 
     public static async Task<InstallPlan> BuildAsync(
         InstallOptions options,
-        ReleaseMetadataClient metadataClient,
+        IReleaseMetadataClient metadataClient,
         CancellationToken cancellationToken)
     {
         var index = await metadataClient.GetReleaseIndexAsync(cancellationToken);

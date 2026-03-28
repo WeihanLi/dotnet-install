@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.CommandLine;
+using System.Reflection;
 using DotNetInstallManager.Options;
 using DotNetInstallManager.Services;
 
@@ -10,7 +12,7 @@ internal static class InstallCommandBuilder
     {
         var channelOption = CreateStringOption("--channel", "Download channel (LTS, STS, or specific version train)", "LTS", "-c", "-Channel");
         var qualityOption = CreateNullableStringOption("--quality", "Optional build quality (daily, preview, GA)", "-q", "-Quality");
-        var versionOption = CreateStringOption("--version", "Specific version to install", "Latest", "-v", "-Version");
+        var versionOption = CreateStringOption("--version", "The SDK or runtime version to install", "Latest", "-v", "-Version");
         var internalOption = CreateBoolOption("--internal", "Download internal builds", "-Internal");
         var jsonOption = CreateFileOption("--jsonfile", "Path to global.json that pins the SDK version", "-JsonFile");
         var installDirOption = CreateStringOption("--install-dir", "Installation root", "<auto>", "-i", "-InstallDir");
@@ -34,6 +36,12 @@ internal static class InstallCommandBuilder
         var downloadTimeoutOption = CreateIntOption("--download-timeout", "HTTP download timeout in seconds", 1200, "-DownloadTimeout");
 
         var root = new RootCommand("NativeAOT-powered dotnet-install manager that mirrors the shell scripts");
+
+        // System.CommandLine adds a built-in --version option that prints the tool version.
+        // We repurpose --version to specify the .NET SDK/runtime version to install instead,
+        // and provide a 'version' subcommand to show the tool version.
+        ((IList<Option>)root.Options).Remove(root.Options.OfType<VersionOption>().FirstOrDefault()!);
+
         root.Add(channelOption);
         root.Add(qualityOption);
         root.Add(versionOption);
@@ -59,6 +67,7 @@ internal static class InstallCommandBuilder
         root.Add(osOption);
         root.Add(downloadTimeoutOption);
         root.Add(CreateRemoveCommand());
+        root.Add(CreateVersionCommand());
 
         root.Validators.Add(result =>
         {
@@ -216,5 +225,20 @@ internal static class InstallCommandBuilder
             DefaultValueFactory = _ => defaultValue
         };
         return option;
+    }
+
+    private static Command CreateVersionCommand()
+    {
+        var versionCommand = new Command("version", "Show the dotnet-install tool version");
+        versionCommand.SetAction((parseResult, _) =>
+        {
+            var version = typeof(InstallCommandBuilder).Assembly
+                .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()
+                ?.InformationalVersion ?? "unknown";
+            var output = parseResult.InvocationConfiguration.Output ?? Console.Out;
+            output.WriteLine(version);
+            return Task.FromResult(0);
+        });
+        return versionCommand;
     }
 }
