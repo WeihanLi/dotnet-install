@@ -1,6 +1,8 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/DotNetInstallManager/DotNetInstallManager.csproj" />
-    <Project Path="src/DotNetInstallManager.Tests/DotNetInstallManager.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DotNetInstallManager.Tests/DotNetInstallManager.Tests.csproj" />
   </Folder>
 </Solution>
