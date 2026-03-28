@@ -17,16 +17,13 @@ The current implementation is usable for:
 
 These areas are still incomplete:
 
-- Archive extraction
-- Install layout mutation
-- PATH updates
 - Actual SDK/runtime removal
 - Full parity with `dotnet-install.sh` and `dotnet-install.ps1`
 
 Current behavior boundaries:
 
 - `--dry-run` stops after install plan generation
-- Non-dry-run install downloads the archive but does not extract it
+- Non-dry-run install downloads the archive, extracts it into the resolved install root, verifies the installed SDK/runtime folder, and updates PATH for the current process unless `--no-path` is set
 - `remove` reports intent only and does not delete installed bits
 
 ## Requirements
@@ -72,6 +69,7 @@ Example output:
 ```text
 dotnet-install plan for channel 10.0 (10.0.5)
 Product: Sdk 10.0.201 | RID: win-x64 | Preview: False
+InstallRoot: C:\Users\<user>\AppData\Local\Microsoft\dotnet
 Primary URL: https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.201/dotnet-sdk-10.0.201-win-x64.zip
 Candidate URLs:
   [0] https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.201/dotnet-sdk-10.0.201-win-x64.zip

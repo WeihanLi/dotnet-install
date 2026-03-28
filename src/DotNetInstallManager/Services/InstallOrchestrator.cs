@@ -18,8 +18,9 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
             using var httpClient = CreateHttpClient(options);
             var metadataClient = new ReleaseMetadataClient(httpClient);
             var plan = await InstallPlanBuilder.BuildAsync(options, metadataClient, cancellationToken);
+            var installRoot = InstallEnvironment.ResolveInstallRoot(options.InstallDir);
 
-            WritePlan(plan, options, standardOut);
+            WritePlan(plan, options, installRoot, standardOut);
 
             if (options.DryRun)
             {
@@ -34,12 +35,24 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
                 return 1;
             }
 
-            if (!options.KeepZip && options.ZipPath is null && options.Verbose)
+            standardOut.WriteLine($"Extracting archive to {installRoot}");
+            var extractor = new ArchiveExtractor(standardOut, options.Verbose);
+
+            try
             {
-                standardOut.WriteLine("KeepZip is false but extraction is not yet implemented; the archive remains on disk.");
+                extractor.Extract(downloadResult.DownloadPath!, installRoot, options.OverrideNonVersionedFiles, cancellationToken);
+                InstallVerifier.VerifyInstalled(plan, installRoot);
+            }
+            finally
+            {
+                if (!options.KeepZip)
+                {
+                    TryDeleteArchive(downloadResult.DownloadPath, standardOut, standardError, options.Verbose);
+                }
             }
 
-            standardOut.WriteLine($"Download complete: {downloadResult.DownloadPath}");
+            InstallEnvironment.ConfigurePath(installRoot, options.NoPath, options.Verbose, standardOut);
+            standardOut.WriteLine($"Installation finished successfully: {plan.ProductKind} {plan.ProductVersion}");
             return 0;
         }
         catch (InstallException ex)
@@ -122,10 +135,11 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
         return proxy;
     }
 
-    private static void WritePlan(InstallPlan plan, InstallOptions options, TextWriter standardOut)
+    private static void WritePlan(InstallPlan plan, InstallOptions options, string installRoot, TextWriter standardOut)
     {
         standardOut.WriteLine($"dotnet-install plan for channel {plan.ChannelVersion} ({plan.ReleaseVersion})");
         standardOut.WriteLine($"Product: {plan.ProductKind} {plan.ProductVersion} | RID: {plan.TargetRid} | Preview: {plan.IsPreview}");
+        standardOut.WriteLine($"InstallRoot: {installRoot}");
         standardOut.WriteLine($"Primary URL: {plan.SourceUrl}");
         standardOut.WriteLine("Candidate URLs:");
         for (var i = 0; i < plan.CandidateUrls.Count; i++)
@@ -133,5 +147,33 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
             standardOut.WriteLine($"  [{i}] {plan.CandidateUrls[i]}");
         }
         standardOut.WriteLine($"DryRun: {options.DryRun} | KeepZip: {options.KeepZip} | ZipPath: {options.ZipPath?.FullName ?? "<temp>"}");
+    }
+
+    private static void TryDeleteArchive(string? archivePath, TextWriter standardOut, TextWriter standardError, bool verbose)
+    {
+        if (string.IsNullOrWhiteSpace(archivePath))
+        {
+            return;
+        }
+
+        try
+        {
+            if (File.Exists(archivePath))
+            {
+                File.Delete(archivePath);
+                if (verbose)
+                {
+                    standardOut.WriteLine($"The temporary archive file \"{archivePath}\" was removed.");
+                }
+            }
+            else if (verbose)
+            {
+                standardOut.WriteLine($"The temporary archive file \"{archivePath}\" does not exist, therefore is not removed.");
+            }
+        }
+        catch (Exception ex)
+        {
+            standardError.WriteLine($"Failed to remove the temporary archive file \"{archivePath}\": {ex.Message}");
+        }
     }
 }
