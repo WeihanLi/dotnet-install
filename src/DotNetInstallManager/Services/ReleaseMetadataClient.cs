@@ -4,7 +4,7 @@ using System.Text.Json.Serialization.Metadata;
 
 namespace DotNetInstallManager.Services;
 
-internal sealed class ReleaseMetadataClient
+internal sealed class ReleaseMetadataClient : IReleaseMetadataClient
 {
     private static readonly Uri ReleaseIndexUri = new("https://dotnetcli.blob.core.windows.net/dotnet/release-metadata/releases-index.json");
 
