@@ -30,3 +30,6 @@ jobs:
 
       - name: Build
         run: dotnet build DotNetInstallManager.slnx
+
+      - name: Test
+        run: dotnet test --no-build
