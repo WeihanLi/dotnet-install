@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\DotNetInstallManager\DotNetInstallManager.csproj" />
+    <ProjectReference Include="..\..\src\DotNetInstallManager\DotNetInstallManager.csproj" />
   </ItemGroup>
 
 </Project>
