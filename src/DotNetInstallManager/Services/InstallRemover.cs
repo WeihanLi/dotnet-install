@@ -53,7 +53,15 @@ internal sealed class InstallRemover
                 continue;
             }
 
-            DeletePath(targetPath);
+            try
+            {
+                DeletePath(targetPath);
+            }
+            catch (Exception ex)
+            {
+                throw new InstallException($"Failed to delete removal target '{targetPath}': {ex.Message}", ex);
+            }
+
             _stdout.WriteLine($"Removed \"{targetPath}\"");
             TryDeleteEmptyParents(Path.GetDirectoryName(targetPath) ?? normalizedRoot, normalizedRoot);
         }

@@ -171,6 +171,38 @@ public sealed class InstallRemoverTests : IDisposable
         Assert.Contains("No SDK or runtime directories matching version '8.0.205' were found", exception.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void RemoveVersion_ThrowsWithTargetPath_WhenDeleteFails()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "swidtag"));
+        var targetPath = Path.Combine(_root, "swidtag", "locked-8.0.205.swidtag");
+        File.WriteAllText(targetPath, "locked");
+
+        using var stream = new FileStream(targetPath, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        var remover = new InstallRemover(TextWriter.Null, verbose: false);
+        var plan = new RemovalPlan(
+            RequestedVersion: "8.0.205",
+            RequestedKind: RemovalRequestKind.Sdk,
+            SdkOnly: false,
+            RuntimeVersion: null,
+            AspNetCoreRuntimeVersion: null,
+            WindowsDesktopRuntimeVersion: null,
+            WorkloadFeatureBand: null,
+            SdkManifestBand: null,
+            WarningMessage: null,
+            Targets:
+            [
+                new RemovalTarget(RemovalTargetKind.FilePattern, "swidtag", "*8.0.205*.swidtag")
+            ]);
+
+        var exception = Assert.Throws<InstallException>(() =>
+            remover.Remove(plan, _root, dryRun: false, CancellationToken.None));
+
+        Assert.Contains("Failed to delete removal target", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(targetPath, exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_root))
