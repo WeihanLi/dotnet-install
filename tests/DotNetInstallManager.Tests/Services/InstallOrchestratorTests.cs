@@ -53,6 +53,11 @@ public sealed class InstallOrchestratorTests : IDisposable
     [Fact]
     public async Task ExecuteRemovalAsync_RetriesWholeCommandWithElevation_OnWindowsAccessFailure()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         Directory.CreateDirectory(Path.Combine(_root, "sdk", "8.0.205"));
 
         var elevationManager = new FakeRemovalElevationManager(canRetryAsAdministrator: true, elevatedExitCode: 0);
@@ -76,6 +81,11 @@ public sealed class InstallOrchestratorTests : IDisposable
     [Fact]
     public async Task ExecuteRemovalAsync_ReturnsError_WhenElevationRelaunchFails()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         Directory.CreateDirectory(Path.Combine(_root, "sdk", "8.0.206"));
         var output = new StringWriter();
 

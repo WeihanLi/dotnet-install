@@ -40,7 +40,13 @@ public sealed class InstallLifecycleTests : IDisposable
         }
         else
         {
-            File.WriteAllText(Path.Combine(dotnetRoot, "dotnet"), "#!/bin/sh\nexit 0\n");
+            var dotnetPath = Path.Combine(dotnetRoot, "dotnet");
+            File.WriteAllText(dotnetPath, "#!/bin/sh\nexit 0\n");
+            File.SetUnixFileMode(
+                dotnetPath,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
         }
 
         var originalPath = Environment.GetEnvironmentVariable("PATH");
