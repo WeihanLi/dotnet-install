@@ -129,11 +129,13 @@ internal static class InstallCommandBuilder
 
             var removeInstallDirOption = CreateStringOption("--install-dir", "Installation root", "<auto>", "--dir", "--folder");
             var sdkOnlyOption = CreateBoolOption("--sdk-only", "Remove only the SDK");
+            var removeDryRunOption = CreateBoolOption("--dry-run", "List the version folders that would be removed without deleting them", "-DryRun");
             var removeVerboseOption = CreateBoolOption("--verbose", "Emit verbose diagnostics");
 
             removeCommand.Add(versionArgument);
             removeCommand.Add(removeInstallDirOption);
             removeCommand.Add(sdkOnlyOption);
+            removeCommand.Add(removeDryRunOption);
             removeCommand.Add(removeVerboseOption);
 
             removeCommand.Validators.Add(result =>
@@ -161,6 +163,7 @@ internal static class InstallCommandBuilder
                 parseResult.GetValue(versionArgument)!,
                 parseResult.GetValue(removeInstallDirOption),
                 parseResult.GetValue(sdkOnlyOption),
+                parseResult.GetValue(removeDryRunOption),
                 parseResult.GetValue(removeVerboseOption));
         }
     }

@@ -183,6 +183,16 @@ public sealed class InstallCommandBuilderTests
     }
 
     [Fact]
+    public async Task RemoveSubcommand_WithDryRunFlag_SetsDryRun()
+    {
+        var root = BuildRoot();
+        await InvokeAsync(root, ["remove", "8.0.205", "--dry-run"]);
+
+        var removeOpts = Assert.Single(_orchestrator.RemoveCalls);
+        Assert.True(removeOpts.DryRun);
+    }
+
+    [Fact]
     public async Task VersionSubcommand_PrintsToolVersion()
     {
         var root = BuildRoot();

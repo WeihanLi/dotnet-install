@@ -13,18 +13,18 @@ The current implementation is usable for:
 - Release metadata lookup
 - RID resolution and candidate URL generation
 - Artifact download, including proxy and feed override options
-- A preview `remove` command surface for future uninstall work
+- Removal of exact-match SDK/runtime version directories under the install root
 
 These areas are still incomplete:
 
-- Actual SDK/runtime removal
+- Full SDK/runtime uninstall parity beyond exact-match directory deletion
 - Full parity with `dotnet-install.sh` and `dotnet-install.ps1`
 
 Current behavior boundaries:
 
 - `--dry-run` stops after install plan generation
 - Non-dry-run install downloads the archive, extracts it into the resolved install root, verifies the installed SDK/runtime folder, and updates PATH for the current process unless `--no-path` is set
-- `remove` reports intent only and does not delete installed bits
+- `remove` deletes exact-match version folders under `sdk`, `host/fxr`, and `shared/*` within the install root; `--sdk-only` limits deletion to `sdk/<version>` and `--dry-run` lists the matching folders without deleting them
 
 ## Requirements
 
@@ -117,11 +117,12 @@ Notes:
 - Use the `version` subcommand to print the tool version
 - `--quality` can only be combined with `--version Latest`
 
-The preview `remove` subcommand currently accepts:
+The `remove` subcommand currently accepts:
 
 - A required `<version>` argument
 - `--install-dir`
 - `--sdk-only`
+- `--dry-run`
 - `--verbose`
 
 ## Build, Test, Pack

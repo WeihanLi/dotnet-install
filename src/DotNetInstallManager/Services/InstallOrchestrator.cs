@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http;
-using System.Text;
 using DotNetInstallManager.Options;
 
 namespace DotNetInstallManager.Services;
@@ -73,17 +72,27 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
         TextWriter standardError,
         CancellationToken cancellationToken)
     {
-        var builder = new StringBuilder();
-        builder.AppendLine("dotnet-install removal");
-        builder.AppendLine($"InstallDir: {options.InstallDir}");
-        builder.AppendLine($"Version: {options.Version} | SdkOnly: {options.SdkOnly}");
-        builder.AppendLine($"Verbose: {options.Verbose}");
-        builder.AppendLine("Next step: implement deletion of target SDK/runtime folders.");
+        try
+        {
+            var installRoot = InstallEnvironment.ResolveInstallRoot(options.InstallDir ?? "<auto>");
+            var remover = new InstallRemover(standardOut, options.Verbose);
+            var result = remover.RemoveVersion(installRoot, options.Version, options.SdkOnly, options.DryRun, cancellationToken);
 
-        standardOut.Write(builder.ToString());
-        standardError.WriteLine("Removal pipeline not wired yet. This is a planning stub.");
-
-        return Task.FromResult(0);
+            standardOut.WriteLine(result.DryRun
+                ? $"Removal dry-run complete: {result.MatchedPaths.Count} path(s) would be removed for version {result.Version} under {result.InstallRoot}"
+                : $"Removal finished successfully: removed {result.MatchedPaths.Count} path(s) for version {result.Version} under {result.InstallRoot}");
+            return Task.FromResult(0);
+        }
+        catch (InstallException ex)
+        {
+            standardError.WriteLine(ex.Message);
+            return Task.FromResult(1);
+        }
+        catch (OperationCanceledException)
+        {
+            standardError.WriteLine("Operation cancelled.");
+            return Task.FromResult(1);
+        }
     }
 
     private static HttpClient CreateHttpClient(InstallOptions options)
