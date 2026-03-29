@@ -5,6 +5,7 @@ namespace DotNetInstallManager.Tests.Services;
 public sealed class InstallLifecycleTests : IDisposable
 {
     private readonly string? _originalInstallDir = Environment.GetEnvironmentVariable("DOTNET_INSTALL_DIR");
+    private readonly string? _originalDotnetRoot = Environment.GetEnvironmentVariable("DOTNET_ROOT");
     private readonly string? _originalPath = Environment.GetEnvironmentVariable("PATH");
     private readonly string _root = Path.Combine(Path.GetTempPath(), "dotnet-install-tests", Guid.NewGuid().ToString("N"));
 
@@ -22,6 +23,34 @@ public sealed class InstallLifecycleTests : IDisposable
         var resolved = InstallEnvironment.ResolveInstallRoot("<auto>");
 
         Assert.Equal(Path.GetFullPath(configured), resolved);
+    }
+
+    [Fact]
+    public void ResolveInstallRoot_UsesDotNetLocationFromPath_WhenAuto()
+    {
+        Environment.SetEnvironmentVariable("DOTNET_INSTALL_DIR", null, EnvironmentVariableTarget.Process);
+        Environment.SetEnvironmentVariable("DOTNET_ROOT", null, EnvironmentVariableTarget.Process);
+
+        var dotnetRoot = Path.Combine(_root, "dotnet-root");
+        Directory.CreateDirectory(dotnetRoot);
+
+        if (OperatingSystem.IsWindows())
+        {
+            File.WriteAllText(Path.Combine(dotnetRoot, "dotnet.cmd"), "@echo off");
+        }
+        else
+        {
+            File.WriteAllText(Path.Combine(dotnetRoot, "dotnet"), "#!/bin/sh\nexit 0\n");
+        }
+
+        var originalPath = Environment.GetEnvironmentVariable("PATH");
+        Environment.SetEnvironmentVariable("PATH", string.IsNullOrWhiteSpace(originalPath)
+            ? dotnetRoot
+            : string.Concat(dotnetRoot, Path.PathSeparator, originalPath), EnvironmentVariableTarget.Process);
+
+        var resolved = InstallEnvironment.ResolveInstallRoot("<auto>");
+
+        Assert.Equal(Path.GetFullPath(dotnetRoot), resolved);
     }
 
     [Fact]
@@ -98,6 +127,7 @@ public sealed class InstallLifecycleTests : IDisposable
     public void Dispose()
     {
         Environment.SetEnvironmentVariable("DOTNET_INSTALL_DIR", _originalInstallDir, EnvironmentVariableTarget.Process);
+        Environment.SetEnvironmentVariable("DOTNET_ROOT", _originalDotnetRoot, EnvironmentVariableTarget.Process);
         Environment.SetEnvironmentVariable("PATH", _originalPath, EnvironmentVariableTarget.Process);
 
         if (Directory.Exists(_root))

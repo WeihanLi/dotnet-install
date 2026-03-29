@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 
 namespace DotNetInstallManager.Services;
 
@@ -62,6 +63,12 @@ internal static class InstallEnvironment
             return configured;
         }
 
+        var discovered = TryResolveInstallRootFromDotNetCommand();
+        if (!string.IsNullOrWhiteSpace(discovered) && Directory.Exists(discovered))
+        {
+            return discovered;
+        }
+
         if (OperatingSystem.IsWindows())
         {
             const string defaultDotnetRoot = @"C:\Program Files\dotnet";
@@ -80,6 +87,50 @@ internal static class InstallEnvironment
         }
 
         return Path.Combine(home, ".dotnet");
+    }
+
+    private static string? TryResolveInstallRootFromDotNetCommand()
+    {
+        var command = OperatingSystem.IsWindows() ? "where" : "which";
+        var arguments = "dotnet";
+
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = command,
+                Arguments = arguments,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = Process.Start(startInfo);
+            if (process is null)
+            {
+                return null;
+            }
+
+            var output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
+
+            if (process.ExitCode != 0 || string.IsNullOrWhiteSpace(output))
+            {
+                return null;
+            }
+
+            var candidate = output
+                .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(Path.GetDirectoryName)
+                .FirstOrDefault(path => !string.IsNullOrWhiteSpace(path));
+
+            return string.IsNullOrWhiteSpace(candidate) ? null : Path.GetFullPath(candidate);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static ImmutableArray<string> SplitPath(string value)
