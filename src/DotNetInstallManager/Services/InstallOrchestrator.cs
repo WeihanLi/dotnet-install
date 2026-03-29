@@ -196,14 +196,14 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
         }
     }
 
-    private static async Task<RemovalPlan> FilterSharedTargetsAsync(
+    internal static async Task<RemovalPlan> FilterSharedTargetsAsync(
         RemovalPlan requestedPlan,
         string installRoot,
         RemovalVersionResolver resolver,
         IReleaseMetadataClient metadataClient,
         CancellationToken cancellationToken)
     {
-        if (requestedPlan.SdkOnly)
+        if (requestedPlan.SdkOnly || requestedPlan.RequestedKind == RemovalRequestKind.Runtime)
         {
             return requestedPlan;
         }
