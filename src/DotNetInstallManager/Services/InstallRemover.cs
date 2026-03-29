@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Text;
+
 namespace DotNetInstallManager.Services;
 
 internal sealed record RemovalResult(
@@ -8,15 +11,106 @@ internal sealed record RemovalResult(
     IReadOnlyList<string> MatchedPaths,
     IReadOnlyList<string> MissingPaths);
 
+internal interface IPrivilegedRemovalExecutor
+{
+    bool TryDelete(string path, TextWriter stdout, bool verbose, out string? failureReason);
+}
+
+internal sealed class WindowsPrivilegedRemovalExecutor : IPrivilegedRemovalExecutor
+{
+    public bool TryDelete(string path, TextWriter stdout, bool verbose, out string? failureReason)
+    {
+        failureReason = null;
+
+        if (!OperatingSystem.IsWindows())
+        {
+            failureReason = "Administrator retry is only supported on Windows.";
+            return false;
+        }
+
+        if (verbose)
+        {
+            stdout.WriteLine($"Retrying removal with administrator privileges for \"{path}\"");
+        }
+
+        try
+        {
+            var script = BuildRemovalScript(path);
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand {EncodePowerShellCommand(script)}",
+                UseShellExecute = true,
+                Verb = "runas",
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+
+            using var process = Process.Start(startInfo);
+            if (process is null)
+            {
+                failureReason = "Failed to launch elevated PowerShell process.";
+                return false;
+            }
+
+            process.WaitForExit();
+            if (process.ExitCode != 0)
+            {
+                failureReason = $"Elevated removal process exited with code {process.ExitCode}.";
+                return false;
+            }
+
+            if (Directory.Exists(path) || File.Exists(path))
+            {
+                failureReason = "Elevated removal completed but the path still exists.";
+                return false;
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            failureReason = ex.Message;
+            return false;
+        }
+    }
+
+    private static string BuildRemovalScript(string path)
+    {
+        var escapedPath = path.Replace("'", "''", StringComparison.Ordinal);
+        return $$"""
+        $path = '{{escapedPath}}'
+        if (Test-Path -LiteralPath $path) {
+            Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction Stop
+        }
+        """;
+    }
+
+    private static string EncodePowerShellCommand(string command) =>
+        Convert.ToBase64String(Encoding.Unicode.GetBytes(command));
+}
+
 internal sealed class InstallRemover
 {
     private readonly TextWriter _stdout;
     private readonly bool _verbose;
+    private readonly IPrivilegedRemovalExecutor _privilegedRemovalExecutor;
+    private readonly Action<string> _deletePath;
 
     public InstallRemover(TextWriter stdout, bool verbose)
+        : this(stdout, verbose, new WindowsPrivilegedRemovalExecutor(), DeletePath)
+    {
+    }
+
+    internal InstallRemover(
+        TextWriter stdout,
+        bool verbose,
+        IPrivilegedRemovalExecutor privilegedRemovalExecutor,
+        Action<string>? deletePath = null)
     {
         _stdout = stdout;
         _verbose = verbose;
+        _privilegedRemovalExecutor = privilegedRemovalExecutor;
+        _deletePath = deletePath ?? DeletePath;
     }
 
     public RemovalResult Remove(RemovalPlan plan, string installRoot, bool dryRun, CancellationToken cancellationToken)
@@ -55,11 +149,24 @@ internal sealed class InstallRemover
 
             try
             {
-                DeletePath(targetPath);
+                _deletePath(targetPath);
             }
             catch (Exception ex)
             {
-                throw new InstallException($"Failed to delete removal target '{targetPath}': {ex.Message}", ex);
+                if (_privilegedRemovalExecutor.TryDelete(targetPath, _stdout, _verbose, out var retryFailureReason))
+                {
+                    _stdout.WriteLine($"Removed \"{targetPath}\" with administrator privileges");
+                    TryDeleteEmptyParents(Path.GetDirectoryName(targetPath) ?? normalizedRoot, normalizedRoot);
+                    continue;
+                }
+
+                var reason = string.IsNullOrWhiteSpace(retryFailureReason) ? ex.Message : $"{ex.Message} Elevated retry failed: {retryFailureReason}";
+                if (OperatingSystem.IsLinux())
+                {
+                    reason = $"{reason} Try rerunning with sudo, for example: sudo dotnet-install remove {plan.RequestedVersion}";
+                }
+
+                throw new InstallException($"Failed to delete removal target '{targetPath}': {reason}", ex);
             }
 
             _stdout.WriteLine($"Removed \"{targetPath}\"");
