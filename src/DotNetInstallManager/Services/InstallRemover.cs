@@ -2,7 +2,7 @@ namespace DotNetInstallManager.Services;
 
 internal sealed record RemovalResult(
     string InstallRoot,
-    string Version,
+    string RequestedVersion,
     bool SdkOnly,
     bool DryRun,
     IReadOnlyList<string> MatchedPaths,
@@ -10,14 +10,6 @@ internal sealed record RemovalResult(
 
 internal sealed class InstallRemover
 {
-    private static readonly string[] RuntimeRelativeRoots =
-    [
-        Path.Combine("host", "fxr"),
-        Path.Combine("shared", "Microsoft.NETCore.App"),
-        Path.Combine("shared", "Microsoft.AspNetCore.App"),
-        Path.Combine("shared", "Microsoft.WindowsDesktop.App")
-    ];
-
     private readonly TextWriter _stdout;
     private readonly bool _verbose;
 
@@ -27,9 +19,9 @@ internal sealed class InstallRemover
         _verbose = verbose;
     }
 
-    public RemovalResult RemoveVersion(string installRoot, string version, bool sdkOnly, bool dryRun, CancellationToken cancellationToken)
+    public RemovalResult Remove(RemovalPlan plan, string installRoot, bool dryRun, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(version))
+        if (string.IsNullOrWhiteSpace(plan.RequestedVersion))
         {
             throw new InstallException("A version is required for removal.");
         }
@@ -38,61 +30,116 @@ internal sealed class InstallRemover
         var matchedPaths = new List<string>();
         var missingPaths = new List<string>();
 
-        foreach (var target in GetCandidatePaths(normalizedRoot, version.Trim(), sdkOnly))
+        foreach (var targetPath in ExpandTargetPaths(plan.Targets, normalizedRoot, cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!Directory.Exists(target))
+            if (!PathExists(targetPath))
             {
                 if (_verbose)
                 {
-                    _stdout.WriteLine($"Skipping missing path \"{target}\"");
+                    _stdout.WriteLine($"Skipping missing path \"{targetPath}\"");
                 }
 
-                missingPaths.Add(target);
+                missingPaths.Add(targetPath);
                 continue;
             }
 
-            matchedPaths.Add(target);
+            matchedPaths.Add(targetPath);
 
             if (dryRun)
             {
-                _stdout.WriteLine($"Would remove \"{target}\"");
+                _stdout.WriteLine($"Would remove \"{targetPath}\"");
                 continue;
             }
 
-            Directory.Delete(target, recursive: true);
-            _stdout.WriteLine($"Removed \"{target}\"");
-            TryDeleteEmptyParents(target, normalizedRoot);
+            DeletePath(targetPath);
+            _stdout.WriteLine($"Removed \"{targetPath}\"");
+            TryDeleteEmptyParents(Path.GetDirectoryName(targetPath) ?? normalizedRoot, normalizedRoot);
         }
 
         if (matchedPaths.Count == 0)
         {
             throw new InstallException(
-                $"No SDK or runtime directories matching version '{version}' were found under '{normalizedRoot}'.");
+                $"No SDK or runtime directories matching version '{plan.RequestedVersion}' were found under '{normalizedRoot}'.");
         }
 
-        return new RemovalResult(normalizedRoot, version, sdkOnly, dryRun, matchedPaths, missingPaths);
+        return new RemovalResult(normalizedRoot, plan.RequestedVersion, plan.SdkOnly, dryRun, matchedPaths, missingPaths);
     }
 
-    private static IEnumerable<string> GetCandidatePaths(string installRoot, string version, bool sdkOnly)
+    private static IEnumerable<string> ExpandTargetPaths(
+        IReadOnlyList<RemovalTarget> targets,
+        string installRoot,
+        CancellationToken cancellationToken)
     {
-        yield return GetVersionPath(installRoot, "sdk", version);
+        foreach (var target in targets)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
 
-        if (sdkOnly)
+            switch (target.Kind)
+            {
+                case RemovalTargetKind.Directory:
+                    yield return GetVersionPath(installRoot, target.RelativeRoot, target.MatchValue);
+                    break;
+                case RemovalTargetKind.DirectoryPattern:
+                    foreach (var path in ExpandPatternDirectories(installRoot, target.RelativeRoot, target.MatchValue))
+                    {
+                        yield return path;
+                    }
+
+                    break;
+                case RemovalTargetKind.FilePattern:
+                    foreach (var path in ExpandFilePattern(installRoot, target.RelativeRoot, target.MatchValue))
+                    {
+                        yield return path;
+                    }
+
+                    break;
+            }
+        }
+    }
+
+    private static IEnumerable<string> ExpandPatternDirectories(string installRoot, string relativeRootPattern, string version)
+    {
+        var separatorIndex = relativeRootPattern.LastIndexOf(Path.DirectorySeparatorChar);
+        var altSeparatorIndex = relativeRootPattern.LastIndexOf(Path.AltDirectorySeparatorChar);
+        var splitIndex = Math.Max(separatorIndex, altSeparatorIndex);
+        var parentRelative = splitIndex >= 0 ? relativeRootPattern[..splitIndex] : string.Empty;
+        var namePattern = splitIndex >= 0 ? relativeRootPattern[(splitIndex + 1)..] : relativeRootPattern;
+        var parentPath = CombineRelative(installRoot, parentRelative);
+
+        if (!Directory.Exists(parentPath))
         {
             yield break;
         }
 
-        foreach (var relativeRoot in RuntimeRelativeRoots)
+        foreach (var directory in Directory.EnumerateDirectories(parentPath, namePattern, SearchOption.TopDirectoryOnly))
         {
-            yield return GetVersionPath(installRoot, relativeRoot, version);
+            yield return CombineRelative(directory, version);
         }
     }
 
-    private static string GetVersionPath(string installRoot, string relativeRoot, string version)
+    private static IEnumerable<string> ExpandFilePattern(string installRoot, string relativeRoot, string filePattern)
     {
-        var path = Path.GetFullPath(Path.Combine(installRoot, relativeRoot, version));
+        var rootPath = CombineRelative(installRoot, relativeRoot);
+        if (!Directory.Exists(rootPath))
+        {
+            yield break;
+        }
+
+        foreach (var file in Directory.EnumerateFiles(rootPath, filePattern, SearchOption.TopDirectoryOnly))
+        {
+            EnsureWithinInstallRoot(file, installRoot);
+            yield return file;
+        }
+    }
+
+    private static string GetVersionPath(string installRoot, string relativeRoot, string version) =>
+        CombineRelative(installRoot, Path.Combine(relativeRoot, version));
+
+    private static string CombineRelative(string installRoot, string relativePath)
+    {
+        var path = Path.GetFullPath(Path.Combine(installRoot, relativePath));
         EnsureWithinInstallRoot(path, installRoot);
         return path;
     }
@@ -112,10 +159,10 @@ internal sealed class InstallRemover
         }
     }
 
-    private static void TryDeleteEmptyParents(string removedPath, string installRoot)
+    private static void TryDeleteEmptyParents(string parentPath, string installRoot)
     {
         var fullRoot = Path.GetFullPath(installRoot);
-        var current = Directory.GetParent(removedPath);
+        var current = new DirectoryInfo(parentPath);
         while (current is not null && !PathsEqual(current.FullName, fullRoot))
         {
             if (current.EnumerateFileSystemInfos().Any())
@@ -123,9 +170,9 @@ internal sealed class InstallRemover
                 break;
             }
 
-            var parentPath = current.Parent?.FullName;
+            var nextParentPath = current.Parent?.FullName;
             current.Delete();
-            current = parentPath is null ? null : new DirectoryInfo(parentPath);
+            current = nextParentPath is null ? null : new DirectoryInfo(nextParentPath);
         }
     }
 
@@ -134,4 +181,20 @@ internal sealed class InstallRemover
             Path.GetFullPath(left),
             Path.GetFullPath(right),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+    private static bool PathExists(string path) => Directory.Exists(path) || File.Exists(path);
+
+    private static void DeletePath(string path)
+    {
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+            return;
+        }
+
+        if (Directory.Exists(path))
+        {
+            Directory.Delete(path, recursive: true);
+        }
+    }
 }

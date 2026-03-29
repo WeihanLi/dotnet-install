@@ -66,7 +66,7 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
         }
     }
 
-    public Task<int> ExecuteRemovalAsync(
+    public async Task<int> ExecuteRemovalAsync(
         RemoveOptions options,
         TextWriter standardOut,
         TextWriter standardError,
@@ -75,23 +75,28 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
         try
         {
             var installRoot = InstallEnvironment.ResolveInstallRoot(options.InstallDir ?? "<auto>");
+            var resolver = new RemovalVersionResolver();
+            using var metadataHttpClient = RemovalVersionResolver.CreateMetadataHttpClient();
+            var metadataClient = new ReleaseMetadataClient(metadataHttpClient);
+            var plan = await resolver.ResolveAsync(options.Version, options.SdkOnly, metadataClient, cancellationToken);
+            plan = await FilterSharedTargetsAsync(plan, installRoot, resolver, metadataClient, cancellationToken);
             var remover = new InstallRemover(standardOut, options.Verbose);
-            var result = remover.RemoveVersion(installRoot, options.Version, options.SdkOnly, options.DryRun, cancellationToken);
+            var result = remover.Remove(plan, installRoot, options.DryRun, cancellationToken);
 
             standardOut.WriteLine(result.DryRun
-                ? $"Removal dry-run complete: {result.MatchedPaths.Count} path(s) would be removed for version {result.Version} under {result.InstallRoot}"
-                : $"Removal finished successfully: removed {result.MatchedPaths.Count} path(s) for version {result.Version} under {result.InstallRoot}");
-            return Task.FromResult(0);
+                ? $"Removal dry-run complete: {result.MatchedPaths.Count} path(s) would be removed for version {result.RequestedVersion} under {result.InstallRoot}"
+                : $"Removal finished successfully: removed {result.MatchedPaths.Count} path(s) for version {result.RequestedVersion} under {result.InstallRoot}");
+            return 0;
         }
         catch (InstallException ex)
         {
             standardError.WriteLine(ex.Message);
-            return Task.FromResult(1);
+            return 1;
         }
         catch (OperationCanceledException)
         {
             standardError.WriteLine("Operation cancelled.");
-            return Task.FromResult(1);
+            return 1;
         }
     }
 
@@ -185,4 +190,60 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
             standardError.WriteLine($"Failed to remove the temporary archive file \"{archivePath}\": {ex.Message}");
         }
     }
+
+    private static async Task<RemovalPlan> FilterSharedTargetsAsync(
+        RemovalPlan requestedPlan,
+        string installRoot,
+        RemovalVersionResolver resolver,
+        IReleaseMetadataClient metadataClient,
+        CancellationToken cancellationToken)
+    {
+        if (requestedPlan.SdkOnly)
+        {
+            return requestedPlan;
+        }
+
+        var sdkRoot = Path.Combine(installRoot, "sdk");
+        if (!Directory.Exists(sdkRoot))
+        {
+            return requestedPlan;
+        }
+
+        var installedSdkVersions = Directory.EnumerateDirectories(sdkRoot)
+            .Select(Path.GetFileName)
+            .Where(name => !string.IsNullOrWhiteSpace(name) &&
+                           !string.Equals(name, requestedPlan.RequestedVersion, StringComparison.OrdinalIgnoreCase))
+            .Cast<string>()
+            .ToList();
+
+        if (installedSdkVersions.Count == 0)
+        {
+            return requestedPlan;
+        }
+
+        var sharedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var sdkVersion in installedSdkVersions)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var otherPlan = await resolver.ResolveAsync(sdkVersion, sdkOnly: false, metadataClient, cancellationToken);
+            foreach (var target in otherPlan.Targets)
+            {
+                sharedKeys.Add(GetTargetKey(target));
+            }
+        }
+
+        var filteredTargets = requestedPlan.Targets
+            .Where(target => IsSdkTargetForRequestedVersion(target, requestedPlan.RequestedVersion) || !sharedKeys.Contains(GetTargetKey(target)))
+            .ToList();
+
+        return requestedPlan with { Targets = filteredTargets };
+    }
+
+    private static bool IsSdkTargetForRequestedVersion(RemovalTarget target, string requestedVersion) =>
+        target.Kind == RemovalTargetKind.Directory &&
+        string.Equals(target.RelativeRoot, "sdk", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(target.MatchValue, requestedVersion, StringComparison.OrdinalIgnoreCase);
+
+    private static string GetTargetKey(RemovalTarget target) =>
+        $"{target.Kind}\0{target.RelativeRoot}\0{target.MatchValue}";
 }

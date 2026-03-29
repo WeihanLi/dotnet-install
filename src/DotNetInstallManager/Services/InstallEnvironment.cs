@@ -56,7 +56,7 @@ internal static class InstallEnvironment
 
     private static string ResolveDefaultInstallRoot()
     {
-        var configured = Environment.GetEnvironmentVariable("DOTNET_INSTALL_DIR");
+        var configured = Environment.GetEnvironmentVariable("DOTNET_INSTALL_DIR") ?? Environment.GetEnvironmentVariable("DOTNET_ROOT");
         if (!string.IsNullOrWhiteSpace(configured))
         {
             return configured;

@@ -24,7 +24,7 @@ Current behavior boundaries:
 
 - `--dry-run` stops after install plan generation
 - Non-dry-run install downloads the archive, extracts it into the resolved install root, verifies the installed SDK/runtime folder, and updates PATH for the current process unless `--no-path` is set
-- `remove` deletes exact-match version folders under `sdk`, `host/fxr`, and `shared/*` within the install root; `--sdk-only` limits deletion to `sdk/<version>` and `--dry-run` lists the matching folders without deleting them
+- `remove` deletes `sdk/<sdk-version>` and, unless `--sdk-only` is set, also removes the corresponding runtime folders and SDK companion assets for that SDK release when metadata resolution succeeds, including versioned `templates`, `packs`, workload metadata, SDK manifests, and matching `swidtag` files; `--dry-run` lists the matching folders without deleting them
 
 ## Requirements
 
@@ -33,7 +33,7 @@ Current behavior boundaries:
 
 Verify the environment:
 
-```powershell
+```sh
 dotnet --list-sdks
 dotnet --list-runtimes
 ```
@@ -42,25 +42,25 @@ dotnet --list-runtimes
 
 Build the solution:
 
-```powershell
+```sh
 dotnet build DotNetInstallManager.slnx
 ```
 
 Run the CLI help:
 
-```powershell
+```sh
 dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- --help
 ```
 
 Show the tool version:
 
-```powershell
+```sh
 dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- version
 ```
 
 Generate an install plan without downloading:
 
-```powershell
+```sh
 dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- --dry-run --channel LTS
 ```
 
@@ -78,13 +78,13 @@ DryRun: True | KeepZip: False | ZipPath: <temp>
 
 Download an SDK archive:
 
-```powershell
+```sh
 dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- --channel LTS --version Latest
 ```
 
 Preview the planned removal of an SDK:
 
-```powershell
+```sh
 dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- remove 8.0.204
 ```
 
@@ -129,20 +129,20 @@ The `remove` subcommand currently accepts:
 
 Build and test the full solution:
 
-```powershell
+```sh
 dotnet build DotNetInstallManager.slnx
 dotnet test DotNetInstallManager.slnx
 ```
 
 Create the global tool package:
 
-```powershell
+```sh
 dotnet pack src/DotNetInstallManager/DotNetInstallManager.csproj -c Release
 ```
 
 Publish a self-contained build to `dist`:
 
-```powershell
+```sh
 dotnet publish src/DotNetInstallManager/DotNetInstallManager.csproj -c Release -f net10.0 --use-current-runtime -o dist
 ```
 

@@ -22,8 +22,24 @@ public sealed class InstallRemoverTests : IDisposable
         CreateVersionDirectory("sdk", "9.0.100");
 
         var remover = new InstallRemover(TextWriter.Null, verbose: false);
+        var plan = new RemovalPlan(
+            RequestedVersion: "8.0.205",
+            SdkOnly: false,
+            RuntimeVersion: "8.0.205",
+            AspNetCoreRuntimeVersion: "8.0.205",
+            WindowsDesktopRuntimeVersion: "8.0.205",
+            WorkloadFeatureBand: null,
+            SdkManifestBand: null,
+            Targets:
+            [
+                new RemovalTarget(RemovalTargetKind.Directory, "sdk", "8.0.205"),
+                new RemovalTarget(RemovalTargetKind.Directory, Path.Combine("host", "fxr"), "8.0.205"),
+                new RemovalTarget(RemovalTargetKind.Directory, Path.Combine("shared", "Microsoft.NETCore.App"), "8.0.205"),
+                new RemovalTarget(RemovalTargetKind.Directory, Path.Combine("shared", "Microsoft.AspNetCore.App"), "8.0.205"),
+                new RemovalTarget(RemovalTargetKind.Directory, Path.Combine("shared", "Microsoft.WindowsDesktop.App"), "8.0.205")
+            ]);
 
-        var result = remover.RemoveVersion(_root, "8.0.205", sdkOnly: false, dryRun: false, CancellationToken.None);
+        var result = remover.Remove(plan, _root, dryRun: false, CancellationToken.None);
 
         Assert.Equal(5, result.MatchedPaths.Count);
         Assert.False(Directory.Exists(Path.Combine(_root, "sdk", "8.0.205")));
@@ -39,8 +55,20 @@ public sealed class InstallRemoverTests : IDisposable
         CreateVersionDirectory(Path.Combine("shared", "Microsoft.NETCore.App"), "8.0.205");
 
         var remover = new InstallRemover(TextWriter.Null, verbose: false);
+        var plan = new RemovalPlan(
+            RequestedVersion: "8.0.205",
+            SdkOnly: true,
+            RuntimeVersion: null,
+            AspNetCoreRuntimeVersion: null,
+            WindowsDesktopRuntimeVersion: null,
+            WorkloadFeatureBand: null,
+            SdkManifestBand: null,
+            Targets:
+            [
+                new RemovalTarget(RemovalTargetKind.Directory, "sdk", "8.0.205")
+            ]);
 
-        var result = remover.RemoveVersion(_root, "8.0.205", sdkOnly: true, dryRun: false, CancellationToken.None);
+        var result = remover.Remove(plan, _root, dryRun: false, CancellationToken.None);
 
         Assert.Single(result.MatchedPaths);
         Assert.False(Directory.Exists(Path.Combine(_root, "sdk", "8.0.205")));
@@ -54,8 +82,21 @@ public sealed class InstallRemoverTests : IDisposable
         CreateVersionDirectory(Path.Combine("shared", "Microsoft.NETCore.App"), "8.0.205");
         var output = new StringWriter();
         var remover = new InstallRemover(output, verbose: false);
+        var plan = new RemovalPlan(
+            RequestedVersion: "8.0.205",
+            SdkOnly: false,
+            RuntimeVersion: "8.0.205",
+            AspNetCoreRuntimeVersion: null,
+            WindowsDesktopRuntimeVersion: null,
+            WorkloadFeatureBand: null,
+            SdkManifestBand: null,
+            Targets:
+            [
+                new RemovalTarget(RemovalTargetKind.Directory, "sdk", "8.0.205"),
+                new RemovalTarget(RemovalTargetKind.Directory, Path.Combine("shared", "Microsoft.NETCore.App"), "8.0.205")
+            ]);
 
-        var result = remover.RemoveVersion(_root, "8.0.205", sdkOnly: false, dryRun: true, CancellationToken.None);
+        var result = remover.Remove(plan, _root, dryRun: true, CancellationToken.None);
 
         Assert.True(result.DryRun);
         Assert.Equal(2, result.MatchedPaths.Count);
@@ -65,13 +106,57 @@ public sealed class InstallRemoverTests : IDisposable
     }
 
     [Fact]
+    public void Remove_ExpandsDirectoryPatternsAndFilePatterns()
+    {
+        CreateVersionDirectory(Path.Combine("packs", "Microsoft.NETCore.App.Host.win-x64"), "8.0.25");
+        CreateVersionDirectory(Path.Combine("packs", "Microsoft.NETCore.App.Host.win-arm64"), "8.0.25");
+        Directory.CreateDirectory(Path.Combine(_root, "swidtag"));
+        File.WriteAllText(Path.Combine(_root, "swidtag", "Microsoft .NET SDK 8.0.205 (x64).swidtag"), "sdk");
+
+        var remover = new InstallRemover(TextWriter.Null, verbose: false);
+        var plan = new RemovalPlan(
+            RequestedVersion: "8.0.205",
+            SdkOnly: false,
+            RuntimeVersion: "8.0.25",
+            AspNetCoreRuntimeVersion: null,
+            WindowsDesktopRuntimeVersion: null,
+            WorkloadFeatureBand: null,
+            SdkManifestBand: null,
+            Targets:
+            [
+                new RemovalTarget(RemovalTargetKind.DirectoryPattern, Path.Combine("packs", "Microsoft.NETCore.App.Host.*"), "8.0.25"),
+                new RemovalTarget(RemovalTargetKind.FilePattern, "swidtag", "*8.0.205*.swidtag")
+            ]);
+
+        var result = remover.Remove(plan, _root, dryRun: false, CancellationToken.None);
+
+        Assert.Equal(3, result.MatchedPaths.Count);
+        Assert.False(Directory.Exists(Path.Combine(_root, "packs", "Microsoft.NETCore.App.Host.win-x64", "8.0.25")));
+        Assert.False(Directory.Exists(Path.Combine(_root, "packs", "Microsoft.NETCore.App.Host.win-arm64", "8.0.25")));
+        Assert.False(File.Exists(Path.Combine(_root, "swidtag", "Microsoft .NET SDK 8.0.205 (x64).swidtag")));
+    }
+
+    [Fact]
     public void RemoveVersion_Throws_WhenVersionDoesNotExist()
     {
         CreateVersionDirectory("sdk", "9.0.100");
         var remover = new InstallRemover(TextWriter.Null, verbose: false);
+        var plan = new RemovalPlan(
+            RequestedVersion: "8.0.205",
+            SdkOnly: false,
+            RuntimeVersion: "8.0.5",
+            AspNetCoreRuntimeVersion: null,
+            WindowsDesktopRuntimeVersion: null,
+            WorkloadFeatureBand: null,
+            SdkManifestBand: null,
+            Targets:
+            [
+                new RemovalTarget(RemovalTargetKind.Directory, "sdk", "8.0.205"),
+                new RemovalTarget(RemovalTargetKind.Directory, Path.Combine("shared", "Microsoft.NETCore.App"), "8.0.5")
+            ]);
 
         var exception = Assert.Throws<InstallException>(() =>
-            remover.RemoveVersion(_root, "8.0.205", sdkOnly: false, dryRun: false, CancellationToken.None));
+            remover.Remove(plan, _root, dryRun: false, CancellationToken.None));
 
         Assert.Contains("No SDK or runtime directories matching version '8.0.205' were found", exception.Message, StringComparison.Ordinal);
     }
