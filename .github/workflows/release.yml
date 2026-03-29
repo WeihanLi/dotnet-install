@@ -1,4 +1,4 @@
-name: Release NativeAOT Artifacts
+name: Release Artifacts
 
 on:
   release:
@@ -42,10 +42,9 @@ jobs:
       - name: Test
         run: dotnet test
 
-      - name: Publish NativeAOT binary
+      - name: Publish
         run: >-
           dotnet publish src/DotNetInstallManager/DotNetInstallManager.csproj
-          --configuration Release
           --runtime ${{ matrix.rid }}
           --self-contained true
           -o "${{ github.workspace }}/artifacts/${{ matrix.rid }}/publish/"
