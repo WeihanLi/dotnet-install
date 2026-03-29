@@ -64,13 +64,13 @@ internal static class InstallEnvironment
 
         if (OperatingSystem.IsWindows())
         {
-            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            if (string.IsNullOrWhiteSpace(localAppData))
+            const string defaultDotnetRoot = @"C:\Program Files\dotnet";
+            if (Directory.Exists(defaultDotnetRoot))
             {
-                throw new InstallException("Unable to resolve the default installation root. Use --install-dir to specify it explicitly.");
+                return defaultDotnetRoot;
             }
 
-            return Path.Combine(localAppData, "Microsoft", "dotnet");
+            throw new InstallException("Unable to resolve the default installation root. Use --install-dir to specify it explicitly.");
         }
 
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
