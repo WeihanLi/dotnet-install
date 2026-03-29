@@ -55,7 +55,7 @@ jobs:
           --self-contained true
           -o "${{ github.workspace }}/artifacts/${{ matrix.rid }}/publish/"
 
-      - name: Pack artifact
+      - name: Stage artifact
         shell: pwsh
         run: |
           $rid = '${{ matrix.rid }}'
@@ -64,22 +64,31 @@ jobs:
           if (-not (Test-Path $publishDir)) {
             throw "Publish directory not found: $publishDir"
           }
-          $archiveDir = Join-Path $Env:GITHUB_WORKSPACE "artifacts/$rid"
-          New-Item -ItemType Directory -Path $archiveDir -Force | Out-Null
-          $archivePath = Join-Path $archiveDir "dotnet-install-$version-$rid.zip"
-          if (Test-Path $archivePath) { Remove-Item $archivePath -Force }
-          Get-ChildItem -Path $publishDir | Compress-Archive -DestinationPath $archivePath
-          Write-Host "Packaged $archivePath"
+          $binaryName = if ($rid.StartsWith('win-')) { 'dotnet-install.exe' } else { 'dotnet-install' }
+          $binaryPath = Join-Path $publishDir $binaryName
+          if (-not (Test-Path $binaryPath)) {
+            throw "Published binary not found: $binaryPath"
+          }
+          $artifactDir = Join-Path $Env:GITHUB_WORKSPACE "artifacts/$rid"
+          New-Item -ItemType Directory -Path $artifactDir -Force | Out-Null
+          $artifactName = if ($rid.StartsWith('win-')) {
+            "dotnet-install-$version-$rid.exe"
+          } else {
+            "dotnet-install-$version-$rid"
+          }
+          $artifactPath = Join-Path $artifactDir $artifactName
+          Copy-Item -LiteralPath $binaryPath -Destination $artifactPath -Force
+          Write-Host "Staged $artifactPath"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v7
         with:
           name: dotnet-install-${{ env.VERSION }}-${{ matrix.rid }}
-          path: artifacts/${{ matrix.rid }}/dotnet-install-${{ env.VERSION }}-${{ matrix.rid }}.zip
+          path: artifacts/${{ matrix.rid }}/dotnet-install-${{ env.VERSION }}-${{ matrix.rid }}*
           if-no-files-found: error
 
       - name: Attach to GitHub release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/${{ matrix.rid }}/dotnet-install-${{ env.VERSION }}-${{ matrix.rid }}.zip
+          files: artifacts/${{ matrix.rid }}/dotnet-install-${{ env.VERSION }}-${{ matrix.rid }}*
