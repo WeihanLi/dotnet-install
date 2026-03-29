@@ -1,6 +1,6 @@
 namespace DotNetInstallManager.Services;
 
-internal sealed class InstallException : Exception
+internal class InstallException : Exception
 {
     public InstallException()
     {

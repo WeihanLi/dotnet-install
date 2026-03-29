@@ -181,7 +181,6 @@ public sealed class InstallRemoverTests : IDisposable
         var remover = new InstallRemover(
             TextWriter.Null,
             verbose: false,
-            new FakePrivilegedRemovalExecutor(success: false, failureReason: "The user canceled the elevation prompt."),
             _ => throw new UnauthorizedAccessException("Access to the path is denied."));
         var plan = new RemovalPlan(
             RequestedVersion: "8.0.205",
@@ -198,48 +197,12 @@ public sealed class InstallRemoverTests : IDisposable
                 new RemovalTarget(RemovalTargetKind.FilePattern, "swidtag", "*8.0.205*.swidtag")
             ]);
 
-        var exception = Assert.Throws<InstallException>(() =>
-            remover.Remove(plan, _root, dryRun: false, CancellationToken.None));
+        Exception exception = OperatingSystem.IsWindows()
+            ? Assert.Throws<RemovalRequiresElevationException>(() => remover.Remove(plan, _root, dryRun: false, CancellationToken.None))
+            : Assert.Throws<InstallException>(() => remover.Remove(plan, _root, dryRun: false, CancellationToken.None));
 
         Assert.Contains("Failed to delete removal target", exception.Message, StringComparison.Ordinal);
         Assert.Contains(targetPath, exception.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Elevated retry failed", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void RemoveVersion_RetriesWithElevation_WhenDeleteFails()
-    {
-        Directory.CreateDirectory(Path.Combine(_root, "swidtag"));
-        var targetPath = Path.Combine(_root, "swidtag", "failed-8.0.206.swidtag");
-        File.WriteAllText(targetPath, "locked");
-
-        var output = new StringWriter();
-        var remover = new InstallRemover(
-            output,
-            verbose: true,
-            new FakePrivilegedRemovalExecutor(success: true, onTryDelete: File.Delete),
-            _ => throw new UnauthorizedAccessException("Access to the path is denied."));
-        var plan = new RemovalPlan(
-            RequestedVersion: "8.0.206",
-            RequestedKind: RemovalRequestKind.Sdk,
-            SdkOnly: false,
-            RuntimeVersion: null,
-            AspNetCoreRuntimeVersion: null,
-            WindowsDesktopRuntimeVersion: null,
-            WorkloadFeatureBand: null,
-            SdkManifestBand: null,
-            WarningMessage: null,
-            Targets:
-            [
-                new RemovalTarget(RemovalTargetKind.FilePattern, "swidtag", "*8.0.206*.swidtag")
-            ]);
-
-        var result = remover.Remove(plan, _root, dryRun: false, CancellationToken.None);
-
-        Assert.Single(result.MatchedPaths);
-        Assert.False(File.Exists(targetPath));
-        Assert.Contains("Removed", output.ToString(), StringComparison.Ordinal);
-        Assert.Contains("administrator privileges", output.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -257,7 +220,6 @@ public sealed class InstallRemoverTests : IDisposable
         var remover = new InstallRemover(
             TextWriter.Null,
             verbose: false,
-            new FakePrivilegedRemovalExecutor(success: false, failureReason: "Administrator retry is only supported on Windows."),
             _ => throw new UnauthorizedAccessException("Access to the path is denied."));
         var plan = new RemovalPlan(
             RequestedVersion: "8.0.207",
@@ -294,26 +256,5 @@ public sealed class InstallRemoverTests : IDisposable
         var path = Path.Combine(_root, relativeRoot, version);
         Directory.CreateDirectory(path);
         File.WriteAllText(Path.Combine(path, "marker.txt"), $"{relativeRoot}:{version}");
-    }
-
-    private sealed class FakePrivilegedRemovalExecutor : IPrivilegedRemovalExecutor
-    {
-        private readonly bool _success;
-        private readonly string? _failureReason;
-        private readonly Action<string>? _onTryDelete;
-
-        public FakePrivilegedRemovalExecutor(bool success, string? failureReason = null, Action<string>? onTryDelete = null)
-        {
-            _success = success;
-            _failureReason = failureReason;
-            _onTryDelete = onTryDelete;
-        }
-
-        public bool TryDelete(string path, TextWriter stdout, bool verbose, out string? failureReason)
-        {
-            _onTryDelete?.Invoke(path);
-            failureReason = _success ? null : _failureReason ?? "retry failed";
-            return _success;
-        }
     }
 }

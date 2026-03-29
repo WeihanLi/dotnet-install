@@ -6,6 +6,22 @@ namespace DotNetInstallManager.Services;
 
 internal sealed class InstallOrchestrator : IInstallOrchestrator
 {
+    private readonly IRemovalElevationManager _removalElevationManager;
+    private readonly Func<TextWriter, bool, InstallRemover> _removerFactory;
+
+    public InstallOrchestrator()
+        : this(new WindowsRemovalElevationManager(), (stdout, verbose) => new InstallRemover(stdout, verbose))
+    {
+    }
+
+    internal InstallOrchestrator(
+        IRemovalElevationManager removalElevationManager,
+        Func<TextWriter, bool, InstallRemover> removerFactory)
+    {
+        _removalElevationManager = removalElevationManager;
+        _removerFactory = removerFactory;
+    }
+
     public async Task<int> ExecuteAsync(
         InstallOptions options,
         TextWriter standardOut,
@@ -85,8 +101,23 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
                 standardOut.WriteLine(plan.WarningMessage);
             }
 
-            var remover = new InstallRemover(standardOut, options.Verbose);
-            var result = remover.Remove(plan, installRoot, options.DryRun, cancellationToken);
+            var remover = _removerFactory(standardOut, options.Verbose);
+            RemovalResult result;
+
+            try
+            {
+                result = remover.Remove(plan, installRoot, options.DryRun, cancellationToken);
+            }
+            catch (RemovalRequiresElevationException) when (!options.DryRun && _removalElevationManager.CanRetryAsAdministrator)
+            {
+                if (!_removalElevationManager.TryRunElevatedRemove(standardOut, options.Verbose, out var exitCode, out var failureReason))
+                {
+                    standardError.WriteLine($"Failed to relaunch removal with administrator privileges: {failureReason}");
+                    return 1;
+                }
+
+                return exitCode;
+            }
 
             standardOut.WriteLine(result.DryRun
                 ? $"Removal dry-run complete: {result.MatchedPaths.Count} path(s) would be removed for version {result.RequestedVersion} under {result.InstallRoot}"

@@ -131,12 +131,14 @@ internal static class InstallCommandBuilder
             var sdkOnlyOption = CreateBoolOption("--sdk-only", "Remove only the SDK");
             var removeDryRunOption = CreateBoolOption("--dry-run", "List the version folders that would be removed without deleting them", "-DryRun");
             var removeVerboseOption = CreateBoolOption("--verbose", "Emit verbose diagnostics");
+            var removeInternalElevatedRetryOption = CreateHiddenBoolOption(WindowsRemovalElevationManager.ElevatedRetryFlag);
 
             removeCommand.Add(versionArgument);
             removeCommand.Add(removeInstallDirOption);
             removeCommand.Add(sdkOnlyOption);
             removeCommand.Add(removeDryRunOption);
             removeCommand.Add(removeVerboseOption);
+            removeCommand.Add(removeInternalElevatedRetryOption);
 
             removeCommand.Validators.Add(result =>
             {
@@ -204,6 +206,15 @@ internal static class InstallCommandBuilder
         var option = new Option<bool>(name, aliases ?? Array.Empty<string>())
         {
             Description = description
+        };
+        return option;
+    }
+
+    private static Option<bool> CreateHiddenBoolOption(string name, params string[] aliases)
+    {
+        var option = new Option<bool>(name, aliases ?? Array.Empty<string>())
+        {
+            Hidden = true
         };
         return option;
     }
