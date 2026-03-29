@@ -24,12 +24,14 @@ public sealed class InstallRemoverTests : IDisposable
         var remover = new InstallRemover(TextWriter.Null, verbose: false);
         var plan = new RemovalPlan(
             RequestedVersion: "8.0.205",
+            RequestedKind: RemovalRequestKind.Sdk,
             SdkOnly: false,
             RuntimeVersion: "8.0.205",
             AspNetCoreRuntimeVersion: "8.0.205",
             WindowsDesktopRuntimeVersion: "8.0.205",
             WorkloadFeatureBand: null,
             SdkManifestBand: null,
+            WarningMessage: null,
             Targets:
             [
                 new RemovalTarget(RemovalTargetKind.Directory, "sdk", "8.0.205"),
@@ -57,12 +59,14 @@ public sealed class InstallRemoverTests : IDisposable
         var remover = new InstallRemover(TextWriter.Null, verbose: false);
         var plan = new RemovalPlan(
             RequestedVersion: "8.0.205",
+            RequestedKind: RemovalRequestKind.Sdk,
             SdkOnly: true,
             RuntimeVersion: null,
             AspNetCoreRuntimeVersion: null,
             WindowsDesktopRuntimeVersion: null,
             WorkloadFeatureBand: null,
             SdkManifestBand: null,
+            WarningMessage: null,
             Targets:
             [
                 new RemovalTarget(RemovalTargetKind.Directory, "sdk", "8.0.205")
@@ -84,12 +88,14 @@ public sealed class InstallRemoverTests : IDisposable
         var remover = new InstallRemover(output, verbose: false);
         var plan = new RemovalPlan(
             RequestedVersion: "8.0.205",
+            RequestedKind: RemovalRequestKind.Sdk,
             SdkOnly: false,
             RuntimeVersion: "8.0.205",
             AspNetCoreRuntimeVersion: null,
             WindowsDesktopRuntimeVersion: null,
             WorkloadFeatureBand: null,
             SdkManifestBand: null,
+            WarningMessage: null,
             Targets:
             [
                 new RemovalTarget(RemovalTargetKind.Directory, "sdk", "8.0.205"),
@@ -116,12 +122,14 @@ public sealed class InstallRemoverTests : IDisposable
         var remover = new InstallRemover(TextWriter.Null, verbose: false);
         var plan = new RemovalPlan(
             RequestedVersion: "8.0.205",
+            RequestedKind: RemovalRequestKind.Runtime,
             SdkOnly: false,
             RuntimeVersion: "8.0.25",
             AspNetCoreRuntimeVersion: null,
             WindowsDesktopRuntimeVersion: null,
             WorkloadFeatureBand: null,
             SdkManifestBand: null,
+            WarningMessage: null,
             Targets:
             [
                 new RemovalTarget(RemovalTargetKind.DirectoryPattern, Path.Combine("packs", "Microsoft.NETCore.App.Host.*"), "8.0.25"),
@@ -143,12 +151,14 @@ public sealed class InstallRemoverTests : IDisposable
         var remover = new InstallRemover(TextWriter.Null, verbose: false);
         var plan = new RemovalPlan(
             RequestedVersion: "8.0.205",
+            RequestedKind: RemovalRequestKind.Sdk,
             SdkOnly: false,
             RuntimeVersion: "8.0.5",
             AspNetCoreRuntimeVersion: null,
             WindowsDesktopRuntimeVersion: null,
             WorkloadFeatureBand: null,
             SdkManifestBand: null,
+            WarningMessage: null,
             Targets:
             [
                 new RemovalTarget(RemovalTargetKind.Directory, "sdk", "8.0.205"),

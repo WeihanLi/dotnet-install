@@ -78,8 +78,13 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
             var resolver = new RemovalVersionResolver();
             using var metadataHttpClient = RemovalVersionResolver.CreateMetadataHttpClient();
             var metadataClient = new ReleaseMetadataClient(metadataHttpClient);
-            var plan = await resolver.ResolveAsync(options.Version, options.SdkOnly, metadataClient, cancellationToken);
+            var plan = await resolver.ResolveAsync(options.Version, options.SdkOnly, installRoot, metadataClient, cancellationToken);
             plan = await FilterSharedTargetsAsync(plan, installRoot, resolver, metadataClient, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(plan.WarningMessage))
+            {
+                standardOut.WriteLine(plan.WarningMessage);
+            }
+
             var remover = new InstallRemover(standardOut, options.Verbose);
             var result = remover.Remove(plan, installRoot, options.DryRun, cancellationToken);
 
@@ -225,7 +230,7 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
         foreach (var sdkVersion in installedSdkVersions)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var otherPlan = await resolver.ResolveAsync(sdkVersion, sdkOnly: false, metadataClient, cancellationToken);
+            var otherPlan = await resolver.ResolveAsync(sdkVersion, sdkOnly: false, installRoot, metadataClient, cancellationToken);
             foreach (var target in otherPlan.Targets)
             {
                 sharedKeys.Add(GetTargetKey(target));

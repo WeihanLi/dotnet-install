@@ -24,7 +24,7 @@ Current behavior boundaries:
 
 - `--dry-run` stops after install plan generation
 - Non-dry-run install downloads the archive, extracts it into the resolved install root, verifies the installed SDK/runtime folder, and updates PATH for the current process unless `--no-path` is set
-- `remove` deletes `sdk/<sdk-version>` and, unless `--sdk-only` is set, also removes the corresponding runtime folders and SDK companion assets for that SDK release when metadata resolution succeeds, including versioned `templates`, `packs`, workload metadata, SDK manifests, and matching `swidtag` files; `--dry-run` lists the matching folders without deleting them
+- `remove` infers whether `<version>` is an SDK version or a runtime version. SDK input removes `sdk/<sdk-version>` and its matching SDK `swidtag`, and unless `--sdk-only` is set also removes the corresponding runtime folders and companion assets when metadata resolution succeeds. Runtime input removes only the matching runtime folders and runtime-version companion assets. If SDK-to-runtime metadata cannot be resolved, the command logs that the runtime version must be removed separately. `--dry-run` lists the matching folders without deleting them
 
 ## Requirements
 

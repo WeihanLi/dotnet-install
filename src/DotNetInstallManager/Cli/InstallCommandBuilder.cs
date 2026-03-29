@@ -123,7 +123,7 @@ internal static class InstallCommandBuilder
 
             var versionArgument = new Argument<string>("version")
             {
-                Description = "Sdk Version to remove",
+                Description = "SDK or runtime version to remove",
                 Arity = ArgumentArity.ExactlyOne
             };
 
@@ -236,7 +236,7 @@ internal static class InstallCommandBuilder
         versionCommand.SetAction((parseResult, _) =>
         {
             var version = typeof(InstallCommandBuilder).Assembly
-                .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
                 ?.InformationalVersion ?? "unknown";
             var output = parseResult.InvocationConfiguration.Output ?? Console.Out;
             output.WriteLine(version);
