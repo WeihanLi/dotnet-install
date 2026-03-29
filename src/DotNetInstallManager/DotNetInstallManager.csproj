@@ -5,7 +5,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <RollForward>Major</RollForward>
     <ToolCommandName>dotnet-install</ToolCommandName>
-    <PackageId>dotnet-install</PackageId>
+    <PackageId>spark.dotnet-install</PackageId>
     <AssemblyName>dotnet-install</AssemblyName>
     <Title>dotnet-install</Title>
     <Description>dotnet-install, a command-line tool for installing .NET SDKs and runtimes</Description>
