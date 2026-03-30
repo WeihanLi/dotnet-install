@@ -40,7 +40,7 @@ internal static class InstallPlanBuilder
         CancellationToken cancellationToken)
     {
         var index = await metadataClient.GetReleaseIndexAsync(cancellationToken);
-        var channel = ResolveChannelEntry(index, options.Channel);
+        var channel = ResolveChannelEntry(index, options.Channel, options.Version);
         var releaseDocument = await metadataClient.GetChannelReleaseDocumentAsync(channel.ReleasesJsonUrl, cancellationToken);
         var release = ResolveRelease(releaseDocument, options);
         var productKind = DetermineProductKind(options);
@@ -62,8 +62,15 @@ internal static class InstallPlanBuilder
             IsPreviewRelease(release.ReleaseVersion));
     }
 
-    private static ReleaseIndexEntry ResolveChannelEntry(ReleaseIndexDocument index, string channelOption)
+    private static ReleaseIndexEntry ResolveChannelEntry(ReleaseIndexDocument index, string channelOption, string versionOption)
     {
+        if (TryInferChannelFromVersion(versionOption, out var versionChannel))
+        {
+            return index.Entries.FirstOrDefault(e =>
+                string.Equals(e.ChannelVersion, versionChannel, StringComparison.OrdinalIgnoreCase))
+                ?? throw new InstallException($"Channel '{versionChannel}' inferred from version '{versionOption.Trim()}' was not found in release metadata.");
+        }
+
         if (string.IsNullOrWhiteSpace(channelOption))
         {
             throw new InstallException("Channel option cannot be empty.");
@@ -110,6 +117,17 @@ internal static class InstallPlanBuilder
         if (!IsLatest(options.Version))
         {
             var version = options.Version.Trim();
+            if (TryParseVersionSelector(version, out var selector))
+            {
+                var wildcardRelease = ordered.FirstOrDefault(r => ReleaseMatchesVersionSelector(r, selector));
+                if (wildcardRelease is null)
+                {
+                    throw new InstallException($"Version '{version}' was not found in channel {document.ChannelVersion}.");
+                }
+
+                return wildcardRelease;
+            }
+
             var explicitRelease = ordered.FirstOrDefault(r => ReleaseMatchesVersion(r, version));
             if (explicitRelease is null)
             {
@@ -157,6 +175,14 @@ internal static class InstallPlanBuilder
         MatchesProductVersion(entry.WindowsDesktopRuntime, version) ||
         (entry.Sdks?.Any(s => MatchesProductVersion(s, version)) ?? false);
 
+    private static bool ReleaseMatchesVersionSelector(ReleaseEntry entry, VersionSelector selector) =>
+        MatchesVersionSelector(entry.ReleaseVersion, selector) ||
+        MatchesVersionSelector(entry.Sdk, selector) ||
+        MatchesVersionSelector(entry.Runtime, selector) ||
+        MatchesVersionSelector(entry.AspNetCoreRuntime, selector) ||
+        MatchesVersionSelector(entry.WindowsDesktopRuntime, selector) ||
+        (entry.Sdks?.Any(s => MatchesVersionSelector(s, selector)) ?? false);
+
     private static bool MatchesProductVersion(ReleaseProduct? product, string version)
     {
         if (product is null)
@@ -167,6 +193,22 @@ internal static class InstallPlanBuilder
         return (!string.IsNullOrEmpty(product.Version) && product.Version.Equals(version, StringComparison.OrdinalIgnoreCase)) ||
                (!string.IsNullOrEmpty(product.VersionDisplay) && product.VersionDisplay.Equals(version, StringComparison.OrdinalIgnoreCase));
     }
+
+    private static bool MatchesVersionSelector(ReleaseProduct? product, VersionSelector selector)
+    {
+        if (product is null)
+        {
+            return false;
+        }
+
+        return MatchesVersionSelector(product.Version, selector) ||
+               MatchesVersionSelector(product.VersionDisplay, selector);
+    }
+
+    private static bool MatchesVersionSelector(string? version, VersionSelector selector) =>
+        TryParseVersionComponents(version, out var major, out var minor) &&
+        major == selector.Major &&
+        (!selector.Minor.HasValue || minor == selector.Minor.Value);
 
     private static bool IsLatest(string version) =>
         string.IsNullOrWhiteSpace(version) || version.Equals("latest", StringComparison.OrdinalIgnoreCase);
@@ -250,8 +292,19 @@ internal static class InstallPlanBuilder
     {
         if (!IsLatest(options.Version))
         {
-            var match = release.Sdks?.FirstOrDefault(s => MatchesProductVersion(s, options.Version)) ??
-                        (MatchesProductVersion(release.Sdk, options.Version) ? release.Sdk : null);
+            var version = options.Version.Trim();
+            ReleaseProduct? match;
+            if (TryParseVersionSelector(version, out var selector))
+            {
+                match = release.Sdks?.FirstOrDefault(s => MatchesVersionSelector(s, selector)) ??
+                        (MatchesVersionSelector(release.Sdk, selector) ? release.Sdk : null);
+            }
+            else
+            {
+                match = release.Sdks?.FirstOrDefault(s => MatchesProductVersion(s, version)) ??
+                        (MatchesProductVersion(release.Sdk, version) ? release.Sdk : null);
+            }
+
             if (match is null)
             {
                 throw new InstallException($"SDK version '{options.Version}' cannot be located within release {release.ReleaseVersion}.");
@@ -476,4 +529,83 @@ internal static class InstallPlanBuilder
         var separator = url.Contains('?', StringComparison.Ordinal) ? '&' : '?';
         return $"{url}{separator}{token}";
     }
+
+    private static bool TryInferChannelFromVersion(string version, out string channelVersion)
+    {
+        channelVersion = string.Empty;
+
+        if (IsLatest(version))
+        {
+            return false;
+        }
+
+        if (TryParseVersionSelector(version, out var selector))
+        {
+            channelVersion = selector.Minor.HasValue
+                ? $"{selector.Major}.{selector.Minor.Value}"
+                : $"{selector.Major}.0";
+            return true;
+        }
+
+        var stablePart = version.Trim().Split('-', 2, StringSplitOptions.TrimEntries)[0];
+        var parts = stablePart.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length >= 2 &&
+            int.TryParse(parts[0], out var major) &&
+            int.TryParse(parts[1], out var minor))
+        {
+            channelVersion = $"{major}.{minor}";
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryParseVersionSelector(string version, out VersionSelector selector)
+    {
+        selector = default;
+
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            return false;
+        }
+
+        var parts = version.Trim().Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 2 &&
+            parts[1].Equals("x", StringComparison.OrdinalIgnoreCase) &&
+            int.TryParse(parts[0], out var major))
+        {
+            selector = new VersionSelector(major, null);
+            return true;
+        }
+
+        if (parts.Length == 3 &&
+            parts[2].Equals("x", StringComparison.OrdinalIgnoreCase) &&
+            int.TryParse(parts[0], out major) &&
+            int.TryParse(parts[1], out var minor))
+        {
+            selector = new VersionSelector(major, minor);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryParseVersionComponents(string? version, out int major, out int minor)
+    {
+        major = 0;
+        minor = 0;
+
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            return false;
+        }
+
+        var stablePart = version.Split('-', 2, StringSplitOptions.TrimEntries)[0];
+        var parts = stablePart.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length >= 2 &&
+               int.TryParse(parts[0], out major) &&
+               int.TryParse(parts[1], out minor);
+    }
+
+    private readonly record struct VersionSelector(int Major, int? Minor);
 }

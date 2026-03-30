@@ -130,6 +130,176 @@ public sealed class InstallPlanBuilderTests
     }
 
     [Fact]
+    public async Task BuildAsync_MatchesLatestVersion_WhenVersionUsesMajorWildcard()
+    {
+        const string rid = "win-x64";
+
+        static ReleaseEntry CreateRelease(string releaseVersion, string releaseDate, string sdkVersion)
+        {
+            var sdkFile = new ReleaseFile(
+                Name: $"dotnet-sdk-{sdkVersion}-{rid}.zip",
+                Rid: rid,
+                Url: $"https://builds.dotnet.microsoft.com/dotnet/Sdk/{sdkVersion}/dotnet-sdk-{sdkVersion}-{rid}.zip",
+                Hash: null);
+
+            var runtimeFile = new ReleaseFile(
+                Name: $"dotnet-runtime-{releaseVersion}-{rid}.zip",
+                Rid: rid,
+                Url: $"https://builds.dotnet.microsoft.com/dotnet/Runtime/{releaseVersion}/dotnet-runtime-{releaseVersion}-{rid}.zip",
+                Hash: null);
+
+            var sdk = new ReleaseProduct(Version: sdkVersion, VersionDisplay: sdkVersion, Files: [sdkFile]);
+            var runtime = new ReleaseProduct(Version: releaseVersion, VersionDisplay: releaseVersion, Files: [runtimeFile]);
+
+            return new ReleaseEntry(
+                ReleaseVersion: releaseVersion,
+                ReleaseDate: releaseDate,
+                Sdk: sdk,
+                Sdks: [sdk],
+                Runtime: runtime,
+                AspNetCoreRuntime: null,
+                WindowsDesktopRuntime: null);
+        }
+
+        var tenChannelDocument = new ReleaseDocument(
+            ChannelVersion: "10.0",
+            ReleaseType: "lts",
+            SupportPhase: "active",
+            Releases:
+            [
+                CreateRelease("10.0.5", "2026-03-10", "10.0.300"),
+                CreateRelease("10.0.4", "2026-02-11", "10.0.201")
+            ]);
+
+        var eightChannelDocument = FakeReleaseMetadataClient.CreateSdkReleaseDocument(
+            channelVersion: "8.0",
+            releaseVersion: "8.0.5",
+            sdkVersion: "8.0.205",
+            runtimeVersion: "8.0.5");
+
+        var client = new FakeReleaseMetadataClient(
+            new ReleaseIndexDocument(
+            [
+                new ReleaseIndexEntry(
+                    ChannelVersion: "8.0",
+                    Product: ".NET",
+                    ReleaseType: "lts",
+                    SupportPhase: "active",
+                    ReleasesJsonUrl: "https://fake.test/8.0/releases.json",
+                    LatestRelease: "8.0.5",
+                    LatestSdk: "8.0.205",
+                    LatestRuntime: "8.0.5"),
+                new ReleaseIndexEntry(
+                    ChannelVersion: "10.0",
+                    Product: ".NET",
+                    ReleaseType: "lts",
+                    SupportPhase: "active",
+                    ReleasesJsonUrl: "https://fake.test/10.0/releases.json",
+                    LatestRelease: "10.0.5",
+                    LatestSdk: "10.0.300",
+                    LatestRuntime: "10.0.5")
+            ]),
+            new Dictionary<string, ReleaseDocument>
+            {
+                ["https://fake.test/8.0/releases.json"] = eightChannelDocument,
+                ["https://fake.test/10.0/releases.json"] = tenChannelDocument
+            });
+
+        var options = DefaultOptions(channel: "8.0", version: "10.x");
+
+        var plan = await InstallPlanBuilder.BuildAsync(options, client, CancellationToken.None);
+
+        Assert.Equal("10.0", plan.ChannelVersion);
+        Assert.Equal("10.0.5", plan.ReleaseVersion);
+        Assert.Equal("10.0.300", plan.ProductVersion);
+    }
+
+    [Fact]
+    public async Task BuildAsync_MatchesLatestVersion_WhenVersionUsesMajorMinorWildcard()
+    {
+        const string rid = "win-x64";
+
+        static ReleaseEntry CreateRelease(string releaseVersion, string releaseDate, string sdkVersion)
+        {
+            var sdkFile = new ReleaseFile(
+                Name: $"dotnet-sdk-{sdkVersion}-{rid}.zip",
+                Rid: rid,
+                Url: $"https://builds.dotnet.microsoft.com/dotnet/Sdk/{sdkVersion}/dotnet-sdk-{sdkVersion}-{rid}.zip",
+                Hash: null);
+
+            var runtimeFile = new ReleaseFile(
+                Name: $"dotnet-runtime-{releaseVersion}-{rid}.zip",
+                Rid: rid,
+                Url: $"https://builds.dotnet.microsoft.com/dotnet/Runtime/{releaseVersion}/dotnet-runtime-{releaseVersion}-{rid}.zip",
+                Hash: null);
+
+            var sdk = new ReleaseProduct(Version: sdkVersion, VersionDisplay: sdkVersion, Files: [sdkFile]);
+            var runtime = new ReleaseProduct(Version: releaseVersion, VersionDisplay: releaseVersion, Files: [runtimeFile]);
+
+            return new ReleaseEntry(
+                ReleaseVersion: releaseVersion,
+                ReleaseDate: releaseDate,
+                Sdk: sdk,
+                Sdks: [sdk],
+                Runtime: runtime,
+                AspNetCoreRuntime: null,
+                WindowsDesktopRuntime: null);
+        }
+
+        var tenChannelDocument = new ReleaseDocument(
+            ChannelVersion: "10.0",
+            ReleaseType: "lts",
+            SupportPhase: "active",
+            Releases:
+            [
+                CreateRelease("10.0.5", "2026-03-10", "10.0.300"),
+                CreateRelease("10.0.4", "2026-02-11", "10.0.201")
+            ]);
+
+        var nineChannelDocument = FakeReleaseMetadataClient.CreateSdkReleaseDocument(
+            channelVersion: "9.0",
+            releaseVersion: "9.0.9",
+            sdkVersion: "9.0.308",
+            runtimeVersion: "9.0.9");
+
+        var client = new FakeReleaseMetadataClient(
+            new ReleaseIndexDocument(
+            [
+                new ReleaseIndexEntry(
+                    ChannelVersion: "9.0",
+                    Product: ".NET",
+                    ReleaseType: "sts",
+                    SupportPhase: "active",
+                    ReleasesJsonUrl: "https://fake.test/9.0/releases.json",
+                    LatestRelease: "9.0.9",
+                    LatestSdk: "9.0.308",
+                    LatestRuntime: "9.0.9"),
+                new ReleaseIndexEntry(
+                    ChannelVersion: "10.0",
+                    Product: ".NET",
+                    ReleaseType: "lts",
+                    SupportPhase: "active",
+                    ReleasesJsonUrl: "https://fake.test/10.0/releases.json",
+                    LatestRelease: "10.0.5",
+                    LatestSdk: "10.0.300",
+                    LatestRuntime: "10.0.5")
+            ]),
+            new Dictionary<string, ReleaseDocument>
+            {
+                ["https://fake.test/9.0/releases.json"] = nineChannelDocument,
+                ["https://fake.test/10.0/releases.json"] = tenChannelDocument
+            });
+
+        var options = DefaultOptions(channel: "9.0", version: "10.0.x");
+
+        var plan = await InstallPlanBuilder.BuildAsync(options, client, CancellationToken.None);
+
+        Assert.Equal("10.0", plan.ChannelVersion);
+        Assert.Equal("10.0.5", plan.ReleaseVersion);
+        Assert.Equal("10.0.300", plan.ProductVersion);
+    }
+
+    [Fact]
     public async Task BuildAsync_ThrowsInstallException_WhenChannelNotFound()
     {
         var releaseDocument = FakeReleaseMetadataClient.CreateSdkReleaseDocument(
