@@ -66,7 +66,9 @@ public sealed class InstallOrchestratorTests : IDisposable
             (stdout, verbose) => new InstallRemover(
                 stdout,
                 verbose,
-                _ => throw new UnauthorizedAccessException("Access denied.")));
+                _ => throw new UnauthorizedAccessException("Access denied.")),
+            new StringReader("yes"),
+            static () => false);
 
         var exitCode = await orchestrator.ExecuteRemovalAsync(
             new RemoveOptions("8.0.205", _root, SdkOnly: true, DryRun: false, Verbose: false),
@@ -95,7 +97,9 @@ public sealed class InstallOrchestratorTests : IDisposable
             (stdout, verbose) => new InstallRemover(
                 stdout,
                 verbose,
-                _ => throw new UnauthorizedAccessException("Access denied.")));
+                _ => throw new UnauthorizedAccessException("Access denied.")),
+            new StringReader("yes"),
+            static () => false);
 
         var exitCode = await orchestrator.ExecuteRemovalAsync(
             new RemoveOptions("8.0.206", _root, SdkOnly: true, DryRun: false, Verbose: false),
@@ -106,6 +110,62 @@ public sealed class InstallOrchestratorTests : IDisposable
         Assert.Equal(1, exitCode);
         Assert.True(elevationManager.TryRunCalled);
         Assert.Contains("Failed to relaunch removal with administrator privileges", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ConfirmExistingInstallAsync_ReturnsFalse_WhenInputIsRedirected()
+    {
+        var plan = new InstallPlan(
+            ChannelVersion: "10.0",
+            ReleaseVersion: "10.0.5",
+            ProductVersion: "10.0.300",
+            ProductKind: InstallProductKind.Sdk,
+            TargetRid: "win-x64",
+            AssetName: "dotnet-sdk-10.0.300-win-x64.zip",
+            SourceUrl: "https://example.test/sdk.zip",
+            CandidateUrls: ["https://example.test/sdk.zip"],
+            ExpectedHash: null,
+            IsPreview: false);
+
+        var result = await InstallOrchestrator.ConfirmExistingInstallAsync(
+            plan,
+            new ExistingInstallDetectionResult([new ExistingInstallMatch("install root", @"C:\Program Files\dotnet\sdk\10.0.300")]),
+            new StringWriter(),
+            new StringWriter(),
+            new StringReader(string.Empty),
+            inputRedirected: true,
+            CancellationToken.None);
+
+        Assert.False(result);
+    }
+
+    [Theory]
+    [InlineData("y")]
+    [InlineData("yes")]
+    public async Task ConfirmExistingInstallAsync_ReturnsTrue_WhenUserConfirms(string response)
+    {
+        var plan = new InstallPlan(
+            ChannelVersion: "10.0",
+            ReleaseVersion: "10.0.5",
+            ProductVersion: "10.0.300",
+            ProductKind: InstallProductKind.Sdk,
+            TargetRid: "win-x64",
+            AssetName: "dotnet-sdk-10.0.300-win-x64.zip",
+            SourceUrl: "https://example.test/sdk.zip",
+            CandidateUrls: ["https://example.test/sdk.zip"],
+            ExpectedHash: null,
+            IsPreview: false);
+
+        var result = await InstallOrchestrator.ConfirmExistingInstallAsync(
+            plan,
+            new ExistingInstallDetectionResult([new ExistingInstallMatch("dotnet --list-sdks", @"C:\Program Files\dotnet\sdk")]),
+            new StringWriter(),
+            new StringWriter(),
+            new StringReader(response),
+            inputRedirected: false,
+            CancellationToken.None);
+
+        Assert.True(result);
     }
 
     public void Dispose()

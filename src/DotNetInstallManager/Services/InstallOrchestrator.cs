@@ -8,18 +8,28 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
 {
     private readonly IRemovalElevationManager _removalElevationManager;
     private readonly Func<TextWriter, bool, InstallRemover> _removerFactory;
+    private readonly TextReader _input;
+    private readonly Func<bool> _isInputRedirected;
 
     public InstallOrchestrator()
-        : this(new WindowsRemovalElevationManager(), (stdout, verbose) => new InstallRemover(stdout, verbose))
+        : this(
+            new WindowsRemovalElevationManager(),
+            (stdout, verbose) => new InstallRemover(stdout, verbose),
+            Console.In,
+            static () => Console.IsInputRedirected)
     {
     }
 
     internal InstallOrchestrator(
         IRemovalElevationManager removalElevationManager,
-        Func<TextWriter, bool, InstallRemover> removerFactory)
+        Func<TextWriter, bool, InstallRemover> removerFactory,
+        TextReader input,
+        Func<bool> isInputRedirected)
     {
         _removalElevationManager = removalElevationManager;
         _removerFactory = removerFactory;
+        _input = input;
+        _isInputRedirected = isInputRedirected;
     }
 
     public async Task<int> ExecuteAsync(
@@ -40,6 +50,12 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
             if (options.DryRun)
             {
                 return 0;
+            }
+
+            var existingInstall = await ExistingInstallDetector.DetectAsync(plan, installRoot, cancellationToken);
+            if (!await ConfirmExistingInstallAsync(plan, existingInstall, standardOut, standardError, _input, _isInputRedirected(), cancellationToken))
+            {
+                return 1;
             }
 
             var downloader = new ArtifactDownloader(httpClient, standardOut, standardError, options.Verbose);
@@ -282,4 +298,43 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
 
     private static string GetTargetKey(RemovalTarget target) =>
         $"{target.Kind}\0{target.RelativeRoot}\0{target.MatchValue}";
+
+    internal static async Task<bool> ConfirmExistingInstallAsync(
+        InstallPlan plan,
+        ExistingInstallDetectionResult detection,
+        TextWriter standardOut,
+        TextWriter standardError,
+        TextReader input,
+        bool inputRedirected,
+        CancellationToken cancellationToken)
+    {
+        if (!detection.IsInstalled)
+        {
+            return true;
+        }
+
+        standardOut.WriteLine($"Warning: {InstallVerifier.GetAssetDisplayName(plan.ProductKind)} version '{plan.ProductVersion}' is already installed.");
+        foreach (var match in detection.Matches)
+        {
+            standardOut.WriteLine($"  Existing installation detected via {match.Source}: {match.Location}");
+        }
+
+        if (inputRedirected)
+        {
+            standardError.WriteLine("Installation canceled because confirmation is required and standard input is redirected.");
+            return false;
+        }
+
+        standardOut.Write("Continue installation? [y/N]: ");
+        var response = await input.ReadLineAsync(cancellationToken);
+        if (response is null ||
+            (!response.Equals("y", StringComparison.OrdinalIgnoreCase) &&
+             !response.Equals("yes", StringComparison.OrdinalIgnoreCase)))
+        {
+            standardError.WriteLine("Installation canceled.");
+            return false;
+        }
+
+        return true;
+    }
 }
