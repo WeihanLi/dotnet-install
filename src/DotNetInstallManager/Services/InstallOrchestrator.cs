@@ -53,7 +53,7 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
             }
 
             var existingInstall = await ExistingInstallDetector.DetectAsync(plan, installRoot, cancellationToken);
-            if (!await ConfirmExistingInstallAsync(plan, existingInstall, standardOut, standardError, _input, _isInputRedirected(), cancellationToken))
+            if (!await ConfirmExistingInstallAsync(plan, existingInstall, options.Yes, standardOut, standardError, _input, _isInputRedirected(), cancellationToken))
             {
                 return 1;
             }
@@ -302,6 +302,7 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
     internal static async Task<bool> ConfirmExistingInstallAsync(
         InstallPlan plan,
         ExistingInstallDetectionResult detection,
+        bool skipConfirmation,
         TextWriter standardOut,
         TextWriter standardError,
         TextReader input,
@@ -317,6 +318,12 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
         foreach (var match in detection.Matches)
         {
             standardOut.WriteLine($"  Existing installation detected via {match.Source}: {match.Location}");
+        }
+
+        if (skipConfirmation)
+        {
+            standardOut.WriteLine("Continuing installation because --yes was specified.");
+            return true;
         }
 
         if (inputRedirected)

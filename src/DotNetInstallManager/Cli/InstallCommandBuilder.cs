@@ -20,6 +20,7 @@ internal static class InstallCommandBuilder
         var runtimeOption = CreateNullableStringOption("--runtime", "Install only a runtime (dotnet, aspnetcore, windowsdesktop)", "-Runtime");
         var sharedRuntimeOption = CreateBoolOption("--shared-runtime", "Obsolete switch that maps to --runtime dotnet", "-SharedRuntime");
         var dryRunOption = CreateBoolOption("--dry-run", "Emit install plan without downloading", "-DryRun");
+        var yesOption = CreateBoolOption("--yes", "Skip confirmation when the requested version is already installed", "-y");
         var noPathOption = CreateBoolOption("--no-path", "Skip PATH mutation for current process", "-NoPath");
         var azureFeedOption = CreateNullableStringOption("--azure-feed", "Override the default Azure feed", "-AzureFeed");
         var uncachedFeedOption = CreateNullableStringOption("--uncached-feed", "Use an uncached feed", "-UncachedFeed");
@@ -52,6 +53,7 @@ internal static class InstallCommandBuilder
         root.Add(runtimeOption);
         root.Add(sharedRuntimeOption);
         root.Add(dryRunOption);
+        root.Add(yesOption);
         root.Add(noPathOption);
         root.Add(azureFeedOption);
         root.Add(uncachedFeedOption);
@@ -102,6 +104,7 @@ internal static class InstallCommandBuilder
             parseResult.GetValue(runtimeOption),
             parseResult.GetValue(sharedRuntimeOption),
             parseResult.GetValue(dryRunOption),
+            parseResult.GetValue(yesOption),
             parseResult.GetValue(noPathOption),
             parseResult.GetValue(azureFeedOption),
             parseResult.GetValue(uncachedFeedOption),

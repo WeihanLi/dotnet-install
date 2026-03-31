@@ -11,6 +11,7 @@ internal sealed record InstallOptions(
     string? Runtime,
     bool SharedRuntime,
     bool DryRun,
+    bool Yes,
     bool NoPath,
     string? AzureFeed,
     string? UncachedFeed,

@@ -85,6 +85,26 @@ public sealed class InstallCommandBuilderTests
     }
 
     [Fact]
+    public async Task YesOption_SetsYesTrue()
+    {
+        var root = BuildRoot();
+        await InvokeAsync(root, ["--yes"]);
+
+        var opts = Assert.Single(_orchestrator.InstallCalls);
+        Assert.True(opts.Yes);
+    }
+
+    [Fact]
+    public async Task YesOption_ShortAlias_SetsYesTrue()
+    {
+        var root = BuildRoot();
+        await InvokeAsync(root, ["-y"]);
+
+        var opts = Assert.Single(_orchestrator.InstallCalls);
+        Assert.True(opts.Yes);
+    }
+
+    [Fact]
     public async Task RuntimeOption_SetsRuntime()
     {
         var root = BuildRoot();

@@ -130,6 +130,7 @@ public sealed class InstallOrchestratorTests : IDisposable
         var result = await InstallOrchestrator.ConfirmExistingInstallAsync(
             plan,
             new ExistingInstallDetectionResult([new ExistingInstallMatch("install root", @"C:\Program Files\dotnet\sdk\10.0.300")]),
+            skipConfirmation: false,
             new StringWriter(),
             new StringWriter(),
             new StringReader(string.Empty),
@@ -159,6 +160,7 @@ public sealed class InstallOrchestratorTests : IDisposable
         var result = await InstallOrchestrator.ConfirmExistingInstallAsync(
             plan,
             new ExistingInstallDetectionResult([new ExistingInstallMatch("dotnet --list-sdks", @"C:\Program Files\dotnet\sdk")]),
+            skipConfirmation: false,
             new StringWriter(),
             new StringWriter(),
             new StringReader(response),
@@ -166,6 +168,39 @@ public sealed class InstallOrchestratorTests : IDisposable
             CancellationToken.None);
 
         Assert.True(result);
+    }
+
+    [Fact]
+    public async Task ConfirmExistingInstallAsync_ReturnsTrue_WhenYesOptionSpecifiedWithRedirectedInput()
+    {
+        var plan = new InstallPlan(
+            ChannelVersion: "10.0",
+            ReleaseVersion: "10.0.5",
+            ProductVersion: "10.0.300",
+            ProductKind: InstallProductKind.Sdk,
+            TargetRid: "win-x64",
+            AssetName: "dotnet-sdk-10.0.300-win-x64.zip",
+            SourceUrl: "https://example.test/sdk.zip",
+            CandidateUrls: ["https://example.test/sdk.zip"],
+            ExpectedHash: null,
+            IsPreview: false);
+
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var result = await InstallOrchestrator.ConfirmExistingInstallAsync(
+            plan,
+            new ExistingInstallDetectionResult([new ExistingInstallMatch("install root", @"C:\Program Files\dotnet\sdk\10.0.300")]),
+            skipConfirmation: true,
+            output,
+            error,
+            new StringReader(string.Empty),
+            inputRedirected: true,
+            CancellationToken.None);
+
+        Assert.True(result);
+        Assert.Contains("Continuing installation because --yes was specified.", output.ToString(), StringComparison.Ordinal);
+        Assert.Equal(string.Empty, error.ToString());
     }
 
     public void Dispose()
