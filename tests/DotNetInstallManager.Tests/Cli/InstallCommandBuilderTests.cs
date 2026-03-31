@@ -36,6 +36,7 @@ public sealed class InstallCommandBuilderTests
         Assert.Equal("LTS", opts.Channel);
         Assert.Equal("Latest", opts.Version);
         Assert.False(opts.Yes);
+        Assert.False(opts.PersistPath);
     }
 
     [Fact]
@@ -116,6 +117,30 @@ public sealed class InstallCommandBuilderTests
 
         var opts = Assert.Single(_orchestrator.InstallCalls);
         Assert.True(opts.Yes);
+    }
+
+    [Fact]
+    public async Task PersistPathOption_SetsPersistPathTrue()
+    {
+        var root = BuildRoot();
+        await InvokeAsync(root, ["--persist-path"]);
+
+        var opts = Assert.Single(_orchestrator.InstallCalls);
+        Assert.True(opts.PersistPath);
+    }
+
+    [Fact]
+    public async Task PersistPathAndNoPathCombination_ReturnsParseError()
+    {
+        var root = BuildRoot();
+        var error = new StringWriter();
+        var parseResult = root.Parse(["--persist-path", "--no-path"]);
+        var exitCode = await parseResult.InvokeAsync(
+            new InvocationConfiguration { Output = TextWriter.Null, Error = error },
+            CancellationToken.None);
+
+        Assert.NotEqual(0, exitCode);
+        Assert.Empty(_orchestrator.InstallCalls);
     }
 
     [Fact]

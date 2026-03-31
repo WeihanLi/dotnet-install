@@ -17,6 +17,7 @@ public sealed class InstallOptionsTests
         bool dryRun = false,
         bool yes = false,
         bool noPath = false,
+        bool persistPath = false,
         string? azureFeed = null,
         string? uncachedFeed = null,
         string? feedCredential = null,
@@ -31,7 +32,7 @@ public sealed class InstallOptionsTests
         string? userProvidedOs = null,
         int downloadTimeoutSeconds = 1200) =>
         new(channel, quality, version, @internal, globalJsonFile, installDir,
-            architecture, runtime, sharedRuntime, dryRun, yes, noPath, azureFeed,
+            architecture, runtime, sharedRuntime, dryRun, yes, noPath, persistPath, azureFeed,
             uncachedFeed, feedCredential, proxyAddress, proxyUseDefaultCredentials,
             proxyBypassList ?? Array.Empty<string>(), overrideNonVersionedFiles,
             keepZip, zipPath, verbose, runtimeId, userProvidedOs, downloadTimeoutSeconds);

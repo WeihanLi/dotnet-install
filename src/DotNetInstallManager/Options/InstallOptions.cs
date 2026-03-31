@@ -13,6 +13,7 @@ internal sealed record InstallOptions(
     bool DryRun,
     bool Yes,
     bool NoPath,
+    bool PersistPath,
     string? AzureFeed,
     string? UncachedFeed,
     string? FeedCredential,

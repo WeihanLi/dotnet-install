@@ -22,7 +22,91 @@ internal static class InstallEnvironment
         return Path.GetFullPath(candidate);
     }
 
-    public static void ConfigurePath(string installRoot, bool noPath, bool verbose, TextWriter stdout)
+    public static void ConfigurePath(string installRoot, bool noPath, bool persistPath, bool verbose, bool shouldUpdatePath, TextWriter stdout)
+        => ConfigurePath(
+            installRoot,
+            noPath,
+            persistPath,
+            verbose,
+            shouldUpdatePath,
+            stdout,
+            Environment.GetEnvironmentVariable,
+            Environment.SetEnvironmentVariable,
+            OperatingSystem.IsWindows());
+
+    public static bool ShouldUpdatePathForInstall(string installRoot)
+        => ShouldUpdatePathForInstall(
+            installRoot,
+            TryResolveInstallRootFromDotNetCommand,
+            Environment.GetEnvironmentVariable,
+            OperatingSystem.IsWindows(),
+            Directory.Exists,
+            File.Exists);
+
+    internal static bool ShouldUpdatePathForInstall(
+        string installRoot,
+        Func<string?> tryResolveDotNetCommandRoot,
+        Func<string, string?> getEnvironmentVariable,
+        bool isWindows,
+        Func<string, bool> directoryExists,
+        Func<string, bool> fileExists)
+    {
+        var comparison = isWindows
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
+
+        var candidates = new HashSet<string>(comparison)
+        {
+            Path.GetFullPath(installRoot)
+        };
+
+        AddCandidate(candidates, getEnvironmentVariable("DOTNET_INSTALL_DIR"));
+        AddCandidate(candidates, getEnvironmentVariable("DOTNET_ROOT"));
+        AddCandidate(candidates, tryResolveDotNetCommandRoot());
+
+        if (isWindows)
+        {
+            AddCandidate(candidates, @"C:\Program Files\dotnet");
+        }
+        else
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (!string.IsNullOrWhiteSpace(home))
+            {
+                AddCandidate(candidates, Path.Combine(home, ".dotnet"));
+            }
+        }
+
+        return !candidates.Any(path => LooksLikeDotNetRoot(path, isWindows, directoryExists, fileExists));
+
+        static void AddCandidate(HashSet<string> candidates, string? candidate)
+        {
+            if (string.IsNullOrWhiteSpace(candidate))
+            {
+                return;
+            }
+
+            try
+            {
+                candidates.Add(Path.GetFullPath(candidate));
+            }
+            catch
+            {
+                // Ignore malformed environment values and continue probing other candidates.
+            }
+        }
+    }
+
+    internal static void ConfigurePath(
+        string installRoot,
+        bool noPath,
+        bool persistPath,
+        bool verbose,
+        bool shouldUpdatePath,
+        TextWriter stdout,
+        Func<string, EnvironmentVariableTarget, string?> getEnvironmentVariable,
+        Action<string, string?, EnvironmentVariableTarget> setEnvironmentVariable,
+        bool isWindows)
     {
         var binPath = Path.GetFullPath(installRoot);
         if (noPath)
@@ -31,10 +115,65 @@ internal static class InstallEnvironment
             return;
         }
 
-        var current = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-        var comparison = OperatingSystem.IsWindows()
+        if (!shouldUpdatePath)
+        {
+            stdout.WriteLine($"Skipping PATH update because an existing .NET installation was detected. Binaries of dotnet can be found in {binPath}");
+            return;
+        }
+
+        if (persistPath && !isWindows)
+        {
+            throw new InstallException("--persist-path is only supported on Windows. Configure your shell profile to persist PATH on this platform.");
+        }
+
+        var comparison = isWindows
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
+
+        EnsurePathContains(
+            "PATH",
+            binPath,
+            EnvironmentVariableTarget.Process,
+            "current process PATH",
+            "Adding to current process PATH",
+            "This change only affects the current process.",
+            verbose,
+            stdout,
+            getEnvironmentVariable,
+            setEnvironmentVariable,
+            comparison);
+
+        if (persistPath)
+        {
+            EnsurePathContains(
+                "PATH",
+                binPath,
+                EnvironmentVariableTarget.User,
+                "user PATH",
+                "Persisting to user PATH",
+                "This change will apply to new shells.",
+                verbose,
+                stdout,
+                getEnvironmentVariable,
+                setEnvironmentVariable,
+                comparison);
+        }
+    }
+
+    private static void EnsurePathContains(
+        string variableName,
+        string binPath,
+        EnvironmentVariableTarget target,
+        string displayName,
+        string actionPrefix,
+        string note,
+        bool verbose,
+        TextWriter stdout,
+        Func<string, EnvironmentVariableTarget, string?> getEnvironmentVariable,
+        Action<string, string?, EnvironmentVariableTarget> setEnvironmentVariable,
+        StringComparison comparison)
+    {
+        var current = getEnvironmentVariable(variableName, target) ?? string.Empty;
 
         foreach (var segment in SplitPath(current))
         {
@@ -42,18 +181,31 @@ internal static class InstallEnvironment
             {
                 if (verbose)
                 {
-                    stdout.WriteLine($"Current process PATH already contains \"{binPath}\"");
+                    stdout.WriteLine($"{char.ToUpperInvariant(displayName[0])}{displayName[1..]} already contains \"{binPath}\"");
                 }
 
                 return;
             }
         }
 
-        stdout.WriteLine($"Adding to current process PATH: \"{binPath}\". Note: This change only affects the current process.");
+        stdout.WriteLine($"{actionPrefix}: \"{binPath}\". Note: {note}");
         var updated = string.IsNullOrEmpty(current)
             ? binPath
             : string.Concat(binPath, Path.PathSeparator, current);
-        Environment.SetEnvironmentVariable("PATH", updated, EnvironmentVariableTarget.Process);
+        setEnvironmentVariable(variableName, updated, target);
+    }
+
+    private static bool LooksLikeDotNetRoot(
+        string path,
+        bool isWindows,
+        Func<string, bool> directoryExists,
+        Func<string, bool> fileExists)
+    {
+        var dotnetExecutable = Path.Combine(path, isWindows ? "dotnet.exe" : "dotnet");
+        return fileExists(dotnetExecutable) ||
+               directoryExists(Path.Combine(path, "sdk")) ||
+               directoryExists(Path.Combine(path, "shared")) ||
+               directoryExists(Path.Combine(path, "host", "fxr"));
     }
 
     private static string ResolveDefaultInstallRoot()

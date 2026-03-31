@@ -66,8 +66,8 @@ public sealed class InstallLifecycleTests : IDisposable
         Environment.SetEnvironmentVariable("PATH", "C:\\existing", EnvironmentVariableTarget.Process);
         var output = new StringWriter();
 
-        InstallEnvironment.ConfigurePath(installRoot, noPath: false, verbose: false, output);
-        InstallEnvironment.ConfigurePath(installRoot, noPath: false, verbose: true, output);
+        InstallEnvironment.ConfigurePath(installRoot, noPath: false, persistPath: false, verbose: false, shouldUpdatePath: true, output);
+        InstallEnvironment.ConfigurePath(installRoot, noPath: false, persistPath: false, verbose: true, shouldUpdatePath: true, output);
 
         var path = Environment.GetEnvironmentVariable("PATH")!;
         var segments = path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -84,10 +84,149 @@ public sealed class InstallLifecycleTests : IDisposable
         Environment.SetEnvironmentVariable("PATH", "C:\\existing", EnvironmentVariableTarget.Process);
         var output = new StringWriter();
 
-        InstallEnvironment.ConfigurePath(installRoot, noPath: true, verbose: false, output);
+        InstallEnvironment.ConfigurePath(installRoot, noPath: true, persistPath: false, verbose: false, shouldUpdatePath: true, output);
 
         Assert.Equal("C:\\existing", Environment.GetEnvironmentVariable("PATH"));
         Assert.Contains(Path.GetFullPath(installRoot), output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ConfigurePath_WithPersistPath_PrependsProcessAndUserPaths_OnlyOnce()
+    {
+        var installRoot = Path.Combine(_root, "dotnet");
+        var store = new Dictionary<EnvironmentVariableTarget, string?>();
+        var output = new StringWriter();
+
+        static string? GetEnvironmentVariable(string name, EnvironmentVariableTarget target, Dictionary<EnvironmentVariableTarget, string?> store) =>
+            name == "PATH" && store.TryGetValue(target, out var value) ? value : null;
+
+        static void SetEnvironmentVariable(string name, string? value, EnvironmentVariableTarget target, Dictionary<EnvironmentVariableTarget, string?> store)
+        {
+            if (name == "PATH")
+            {
+                store[target] = value;
+            }
+        }
+
+        store[EnvironmentVariableTarget.Process] = "C:\\existing";
+        store[EnvironmentVariableTarget.User] = "C:\\user-existing";
+
+        InstallEnvironment.ConfigurePath(
+            installRoot,
+            noPath: false,
+            persistPath: true,
+            verbose: false,
+            shouldUpdatePath: true,
+            output,
+            (name, target) => GetEnvironmentVariable(name, target, store),
+            (name, value, target) => SetEnvironmentVariable(name, value, target, store),
+            isWindows: true);
+
+        InstallEnvironment.ConfigurePath(
+            installRoot,
+            noPath: false,
+            persistPath: true,
+            verbose: true,
+            shouldUpdatePath: true,
+            output,
+            (name, target) => GetEnvironmentVariable(name, target, store),
+            (name, value, target) => SetEnvironmentVariable(name, value, target, store),
+            isWindows: true);
+
+        var expectedPath = Path.GetFullPath(installRoot);
+        Assert.StartsWith(expectedPath + Path.PathSeparator, store[EnvironmentVariableTarget.Process], StringComparison.Ordinal);
+        Assert.StartsWith(expectedPath + Path.PathSeparator, store[EnvironmentVariableTarget.User], StringComparison.Ordinal);
+        Assert.Equal(1, store[EnvironmentVariableTarget.Process]!.Split(Path.PathSeparator).Count(segment =>
+            string.Equals(segment, expectedPath, StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal(1, store[EnvironmentVariableTarget.User]!.Split(Path.PathSeparator).Count(segment =>
+            string.Equals(segment, expectedPath, StringComparison.OrdinalIgnoreCase)));
+        Assert.Contains("Current process PATH already contains", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("User PATH already contains", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ConfigurePath_WithPersistPath_ThrowsOnNonWindows()
+    {
+        var installRoot = Path.Combine(_root, "dotnet");
+
+        var exception = Assert.Throws<InstallException>(() => InstallEnvironment.ConfigurePath(
+            installRoot,
+            noPath: false,
+            persistPath: true,
+            verbose: false,
+            shouldUpdatePath: true,
+            TextWriter.Null,
+            (_, _) => null,
+            (_, _, _) => { },
+            isWindows: false));
+
+        Assert.Contains("--persist-path is only supported on Windows", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ConfigurePath_SkipsPathMutation_WhenExistingDotNetInstallationWasDetected()
+    {
+        var installRoot = Path.Combine(_root, "dotnet");
+        var store = new Dictionary<EnvironmentVariableTarget, string?>
+        {
+            [EnvironmentVariableTarget.Process] = "C:\\existing",
+            [EnvironmentVariableTarget.User] = "C:\\user-existing"
+        };
+        var output = new StringWriter();
+
+        InstallEnvironment.ConfigurePath(
+            installRoot,
+            noPath: false,
+            persistPath: true,
+            verbose: false,
+            shouldUpdatePath: false,
+            output,
+            (name, target) => name == "PATH" && store.TryGetValue(target, out var value) ? value : null,
+            (name, value, target) =>
+            {
+                if (name == "PATH")
+                {
+                    store[target] = value;
+                }
+            },
+            isWindows: true);
+
+        Assert.Equal("C:\\existing", store[EnvironmentVariableTarget.Process]);
+        Assert.Equal("C:\\user-existing", store[EnvironmentVariableTarget.User]);
+        Assert.Contains("Skipping PATH update because an existing .NET installation was detected.", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShouldUpdatePathForInstall_ReturnsFalse_WhenDotNetAlreadyExistsOnPath()
+    {
+        var installRoot = Path.Combine(_root, "new-install");
+        var existingRoot = Path.Combine(_root, "existing-dotnet");
+
+        var result = InstallEnvironment.ShouldUpdatePathForInstall(
+            installRoot,
+            () => existingRoot,
+            _ => null,
+            isWindows: true,
+            directoryExists: path => string.Equals(path, Path.Combine(existingRoot, "sdk"), StringComparison.OrdinalIgnoreCase),
+            fileExists: path => string.Equals(path, Path.Combine(existingRoot, "dotnet.exe"), StringComparison.OrdinalIgnoreCase));
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void ShouldUpdatePathForInstall_ReturnsTrue_WhenNoExistingDotNetInstallationIsFound()
+    {
+        var installRoot = Path.Combine(_root, "first-install");
+
+        var result = InstallEnvironment.ShouldUpdatePathForInstall(
+            installRoot,
+            () => null,
+            _ => null,
+            isWindows: true,
+            directoryExists: _ => false,
+            fileExists: _ => false);
+
+        Assert.True(result);
     }
 
     [Fact]

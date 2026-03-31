@@ -107,6 +107,7 @@ public sealed class ArtifactDownloaderTests : IDisposable
             DryRun: false,
             Yes: false,
             NoPath: false,
+            PersistPath: false,
             AzureFeed: null,
             UncachedFeed: null,
             FeedCredential: null,

@@ -44,6 +44,7 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
             var metadataClient = new ReleaseMetadataClient(httpClient);
             var plan = await InstallPlanBuilder.BuildAsync(options, metadataClient, cancellationToken);
             var installRoot = InstallEnvironment.ResolveInstallRoot(options.InstallDir);
+            var shouldUpdatePath = InstallEnvironment.ShouldUpdatePathForInstall(installRoot);
 
             WritePlan(plan, options, installRoot, standardOut);
 
@@ -82,7 +83,7 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
                 }
             }
 
-            InstallEnvironment.ConfigurePath(installRoot, options.NoPath, options.Verbose, standardOut);
+            InstallEnvironment.ConfigurePath(installRoot, options.NoPath, options.PersistPath, options.Verbose, shouldUpdatePath, standardOut);
             standardOut.WriteLine($"Installation finished successfully: {plan.ProductKind} {plan.ProductVersion}");
             return 0;
         }

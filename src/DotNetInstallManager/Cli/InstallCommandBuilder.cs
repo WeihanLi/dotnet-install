@@ -29,6 +29,7 @@ internal static class InstallCommandBuilder
             !string.IsNullOrWhiteSpace(getEnvironmentVariable("CI")),
             "-y");
         var noPathOption = CreateBoolOption("--no-path", "Skip PATH mutation for current process", "-NoPath");
+        var persistPathOption = CreateBoolOption("--persist-path", "Persist the install location to the user PATH for new shells");
         var azureFeedOption = CreateNullableStringOption("--azure-feed", "Override the default Azure feed", "-AzureFeed");
         var uncachedFeedOption = CreateNullableStringOption("--uncached-feed", "Use an uncached feed", "-UncachedFeed");
         var feedCredentialOption = CreateNullableStringOption("--feed-credential", "Token appended to feed URLs", "-FeedCredential");
@@ -62,6 +63,7 @@ internal static class InstallCommandBuilder
         root.Add(dryRunOption);
         root.Add(yesOption);
         root.Add(noPathOption);
+        root.Add(persistPathOption);
         root.Add(azureFeedOption);
         root.Add(uncachedFeedOption);
         root.Add(feedCredentialOption);
@@ -85,6 +87,11 @@ internal static class InstallCommandBuilder
             if (!string.IsNullOrWhiteSpace(quality) && !string.Equals(version, "latest", StringComparison.OrdinalIgnoreCase))
             {
                 result.AddError("Quality and Version options cannot be combined. Use --version latest to pair with --quality.");
+            }
+
+            if (result.GetValue(noPathOption) && result.GetValue(persistPathOption))
+            {
+                result.AddError("The --no-path and --persist-path options cannot be combined.");
             }
         });
 
@@ -113,6 +120,7 @@ internal static class InstallCommandBuilder
             parseResult.GetValue(dryRunOption),
             parseResult.GetValue(yesOption),
             parseResult.GetValue(noPathOption),
+            parseResult.GetValue(persistPathOption),
             parseResult.GetValue(azureFeedOption),
             parseResult.GetValue(uncachedFeedOption),
             parseResult.GetValue(feedCredentialOption),
