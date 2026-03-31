@@ -27,7 +27,7 @@ jobs:
 
       - name: Setup .NET SDK
         run: |
-          dotnet run ./src/DotNetInstallManager/DotNetInstallManager.csproj -c Release -- --version 10.0.x
+          dotnet run --project ./src/DotNetInstallManager/DotNetInstallManager.csproj -c Release -- --version 10.0.x
           dotnet --info
 
       # Build your nuget package here
