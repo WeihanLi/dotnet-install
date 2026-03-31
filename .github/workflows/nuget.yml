@@ -1,0 +1,34 @@
+name: nuget-publish
+
+on:
+  release:
+    types: [ published ]
+  workflow_dispatch:
+    inputs:
+      version:
+        type: string
+        default: ''
+        description: "version to use for the nuget package, e.g. 1.0.0 or 1.0.0-preview-3"
+        required: true
+
+jobs:
+  nuget-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # enable GitHub OIDC token issuance for this job
+
+    steps:
+      # Build your artifacts/my-sdk.nupkg package here
+      - name: Build NuGet package
+        run: dotnet pack src/DotNetInstallManager/DotNetInstallManager.csproj -c Release -o artifacts/out/
+
+      # Get a short-lived NuGet API key
+      - name: NuGet login (OIDC → temp API key)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: 'weihanli'
+
+      # Push the package
+      - name: NuGet push
+        run: dotnet nuget push artifacts/out/*.nupkg --api-key ${{steps.login.outputs.NUGET_API_KEY}} --source nuget
