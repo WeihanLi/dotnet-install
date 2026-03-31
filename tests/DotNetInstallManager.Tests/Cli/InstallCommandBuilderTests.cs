@@ -9,8 +9,11 @@ public sealed class InstallCommandBuilderTests
 {
     private readonly FakeInstallOrchestrator _orchestrator = new();
 
-    private RootCommand BuildRoot() =>
-        InstallCommandBuilder.Build(_orchestrator, CancellationToken.None);
+    private RootCommand BuildRoot(Func<string, string?>? getEnvironmentVariable = null) =>
+        InstallCommandBuilder.Build(
+            _orchestrator,
+            CancellationToken.None,
+            getEnvironmentVariable ?? (_ => null));
 
     private static Task<int> InvokeAsync(RootCommand root, string[] args, StringWriter? outputWriter = null)
     {
@@ -32,6 +35,17 @@ public sealed class InstallCommandBuilderTests
         var opts = Assert.Single(_orchestrator.InstallCalls);
         Assert.Equal("LTS", opts.Channel);
         Assert.Equal("Latest", opts.Version);
+        Assert.False(opts.Yes);
+    }
+
+    [Fact]
+    public async Task DefaultInvocation_SetsYesTrue_WhenCiEnvironmentVariableIsPresent()
+    {
+        var root = BuildRoot(name => name == "CI" ? "true" : null);
+        await InvokeAsync(root, []);
+
+        var opts = Assert.Single(_orchestrator.InstallCalls);
+        Assert.True(opts.Yes);
     }
 
     [Fact]

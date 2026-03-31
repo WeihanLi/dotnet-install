@@ -9,6 +9,9 @@ namespace DotNetInstallManager.Cli;
 internal static class InstallCommandBuilder
 {
     internal static RootCommand Build(IInstallOrchestrator orchestrator, CancellationToken externalToken)
+        => Build(orchestrator, externalToken, Environment.GetEnvironmentVariable);
+
+    internal static RootCommand Build(IInstallOrchestrator orchestrator, CancellationToken externalToken, Func<string, string?> getEnvironmentVariable)
     {
         var channelOption = CreateStringOption("--channel", "Download channel (LTS, STS, or specific version train)", "LTS", "-c", "-Channel");
         var qualityOption = CreateNullableStringOption("--quality", "Optional build quality (daily, preview, GA)", "-q", "-Quality");
@@ -20,7 +23,11 @@ internal static class InstallCommandBuilder
         var runtimeOption = CreateNullableStringOption("--runtime", "Install only a runtime (dotnet, aspnetcore, windowsdesktop)", "-Runtime");
         var sharedRuntimeOption = CreateBoolOption("--shared-runtime", "Obsolete switch that maps to --runtime dotnet", "-SharedRuntime");
         var dryRunOption = CreateBoolOption("--dry-run", "Emit install plan without downloading", "-DryRun");
-        var yesOption = CreateBoolOption("--yes", "Skip confirmation when the requested version is already installed", "-y");
+        var yesOption = CreateBoolOptionWithDefault(
+            "--yes",
+            "Skip confirmation when the requested version is already installed",
+            !string.IsNullOrWhiteSpace(getEnvironmentVariable("CI")),
+            "-y");
         var noPathOption = CreateBoolOption("--no-path", "Skip PATH mutation for current process", "-NoPath");
         var azureFeedOption = CreateNullableStringOption("--azure-feed", "Override the default Azure feed", "-AzureFeed");
         var uncachedFeedOption = CreateNullableStringOption("--uncached-feed", "Use an uncached feed", "-UncachedFeed");
@@ -209,6 +216,16 @@ internal static class InstallCommandBuilder
         var option = new Option<bool>(name, aliases ?? Array.Empty<string>())
         {
             Description = description
+        };
+        return option;
+    }
+
+    private static Option<bool> CreateBoolOptionWithDefault(string name, string description, bool defaultValue, params string[] aliases)
+    {
+        var option = new Option<bool>(name, aliases ?? Array.Empty<string>())
+        {
+            Description = description,
+            DefaultValueFactory = _ => defaultValue
         };
         return option;
     }
