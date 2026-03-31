@@ -1,4 +1,4 @@
-# dotnet-install ![Build](https://github.com/WeihanLi/dotnet-install/actions/workflows/build.yml/badge.svg)
+# dotnet-install ![Build](https://github.com/WeihanLi/dotnet-install/actions/workflows/build.yml/badge.svg) [![NuGet Latest](https://img.shields.io/nuget/vpre/spark.dotnet-install)](https://www.nuget.org/packages/spark.dotnet-install/absoluteLatest)
 
 Managed prototype of the `dotnet-install` shell scripts.
 
