@@ -55,8 +55,8 @@ jobs:
       - name: Publish
         run: >-
           dotnet publish src/DotNetInstallManager/DotNetInstallManager.csproj
+          -p PublishAot=true
           --runtime ${{ matrix.rid }}
-          --self-contained true
           -o "${{ github.workspace }}/artifacts/${{ matrix.rid }}/publish/"
 
       - name: Stage artifact
