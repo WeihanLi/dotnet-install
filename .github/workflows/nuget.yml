@@ -43,4 +43,4 @@ jobs:
 
       # Push the package
       - name: NuGet push
-        run: dotnet nuget push ./artifacts/out/*.nupkg --api-key ${{steps.login.outputs.NUGET_API_KEY}} --source nuget
+        run: dotnet nuget push ./artifacts/out/*.nupkg --api-key ${{steps.login.outputs.NUGET_API_KEY}} --source nuget --skip-duplicate
