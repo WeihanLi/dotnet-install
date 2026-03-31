@@ -18,9 +18,9 @@ jobs:
       id-token: write  # enable GitHub OIDC token issuance for this job
 
     steps:
-      # Build your artifacts/my-sdk.nupkg package here
+      # Build your nuget package here
       - name: Build NuGet package
-        run: dotnet pack src/DotNetInstallManager/DotNetInstallManager.csproj -c Release -o artifacts/out/
+        run: dotnet pack ./src/DotNetInstallManager/DotNetInstallManager.csproj -c Release -o ./artifacts/out/
 
       # Get a short-lived NuGet API key
       - name: NuGet login (OIDC → temp API key)
@@ -31,4 +31,4 @@ jobs:
 
       # Push the package
       - name: NuGet push
-        run: dotnet nuget push artifacts/out/*.nupkg --api-key ${{steps.login.outputs.NUGET_API_KEY}} --source nuget
+        run: dotnet nuget push ./artifacts/out/*.nupkg --api-key ${{steps.login.outputs.NUGET_API_KEY}} --source nuget
