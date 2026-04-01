@@ -63,7 +63,8 @@ public sealed class InstallLifecycleTests : IDisposable
     public void ConfigurePath_PrependsInstallRoot_OnlyOnce()
     {
         var installRoot = Path.Combine(_root, "dotnet");
-        Environment.SetEnvironmentVariable("PATH", "C:\\existing", EnvironmentVariableTarget.Process);
+        var existingPath = Path.Combine(_root, "existing");
+        Environment.SetEnvironmentVariable("PATH", existingPath, EnvironmentVariableTarget.Process);
         var output = new StringWriter();
 
         InstallEnvironment.ConfigurePath(installRoot, noPath: false, persistPath: false, verbose: false, shouldUpdatePath: true, output);
@@ -81,12 +82,13 @@ public sealed class InstallLifecycleTests : IDisposable
     public void ConfigurePath_WithNoPath_PrintsLocationWithoutMutatingPath()
     {
         var installRoot = Path.Combine(_root, "dotnet");
-        Environment.SetEnvironmentVariable("PATH", "C:\\existing", EnvironmentVariableTarget.Process);
+        var existingPath = Path.Combine(_root, "existing");
+        Environment.SetEnvironmentVariable("PATH", existingPath, EnvironmentVariableTarget.Process);
         var output = new StringWriter();
 
         InstallEnvironment.ConfigurePath(installRoot, noPath: true, persistPath: false, verbose: false, shouldUpdatePath: true, output);
 
-        Assert.Equal("C:\\existing", Environment.GetEnvironmentVariable("PATH"));
+        Assert.Equal(existingPath, Environment.GetEnvironmentVariable("PATH"));
         Assert.Contains(Path.GetFullPath(installRoot), output.ToString(), StringComparison.Ordinal);
     }
 
@@ -108,8 +110,10 @@ public sealed class InstallLifecycleTests : IDisposable
             }
         }
 
-        store[EnvironmentVariableTarget.Process] = "C:\\existing";
-        store[EnvironmentVariableTarget.User] = "C:\\user-existing";
+        var processPath = Path.Combine(_root, "existing-process");
+        var userPath = Path.Combine(_root, "existing-user");
+        store[EnvironmentVariableTarget.Process] = processPath;
+        store[EnvironmentVariableTarget.User] = userPath;
 
         InstallEnvironment.ConfigurePath(
             installRoot,
