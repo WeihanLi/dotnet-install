@@ -216,6 +216,15 @@ internal static class InstallEnvironment
             return configured;
         }
 
+        if (TryResolveDotnetPath() is { } dotnetPath)
+        {
+            var candidate = Path.GetDirectoryName(dotnetPath);
+            if (!string.IsNullOrEmpty(candidate))
+            {
+               return candidate;
+            }
+        }
+
         var discovered = TryResolveInstallRootFromDotNetCommand();
         if (!string.IsNullOrWhiteSpace(discovered) && Directory.Exists(discovered))
         {
@@ -240,6 +249,40 @@ internal static class InstallEnvironment
         }
 
         return Path.Combine(home, ".dotnet");
+    }
+
+    private static string? TryResolveDotnetPath()
+        => TryResolveDotnetPath(
+            Environment.GetEnvironmentVariable,
+            OperatingSystem.IsWindows(),
+            Directory.Exists,
+            File.Exists,
+            UnixInteropHelper.RealPath);
+
+    internal static string? TryResolveDotnetPath(
+        Func<string, string?> getEnvironmentVariable,
+        bool isWindows,
+        Func<string, bool> directoryExists,
+        Func<string, bool> fileExists,
+        Func<string, string?> resolveRealPath)
+    {
+        var executableName = isWindows ? "dotnet.exe" : "dotnet";
+        var commandPath = getEnvironmentVariable("PATH")?
+            .Split([Path.PathSeparator], options: StringSplitOptions.RemoveEmptyEntries)
+            .Select(p => p.Trim('"'))
+            .Where(p => !string.IsNullOrWhiteSpace(p)
+                   && !Path.GetInvalidPathChars().Any(p.Contains)
+                   && directoryExists(p)
+                   )
+            .Select(p => Path.Combine(p, executableName))
+            .FirstOrDefault(fileExists);
+
+        if (string.IsNullOrWhiteSpace(commandPath) || isWindows)
+        {
+            return commandPath;
+        }
+
+        return resolveRealPath(commandPath);
     }
 
     private static string? TryResolveInstallRootFromDotNetCommand()

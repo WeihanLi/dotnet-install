@@ -36,7 +36,7 @@ public sealed class InstallLifecycleTests : IDisposable
 
         if (OperatingSystem.IsWindows())
         {
-            File.WriteAllText(Path.Combine(dotnetRoot, "dotnet.cmd"), "@echo off");
+            File.WriteAllText(Path.Combine(dotnetRoot, "dotnet.exe"), string.Empty);
         }
         else
         {
@@ -57,6 +57,61 @@ public sealed class InstallLifecycleTests : IDisposable
         var resolved = InstallEnvironment.ResolveInstallRoot("<auto>");
 
         Assert.Equal(Path.GetFullPath(dotnetRoot), resolved);
+    }
+
+    [Fact]
+    public void TryResolveDotnetPath_UsesQuotedPathEntry_WhenExecutableExists()
+    {
+        var dotnetRoot = Path.Combine(_root, "quoted-dotnet");
+        var executableName = OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
+        var expected = Path.Combine(dotnetRoot, executableName);
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+        var resolved = InstallEnvironment.TryResolveDotnetPath(
+            name => name == "PATH" ? $"\"{dotnetRoot}\"" : null,
+            OperatingSystem.IsWindows(),
+            path => string.Equals(Path.GetFullPath(path), Path.GetFullPath(dotnetRoot), comparison),
+            path => string.Equals(Path.GetFullPath(path), Path.GetFullPath(expected), comparison),
+            path => path);
+
+        Assert.Equal(expected, resolved, OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public void TryResolveDotnetPath_SkipsInvalidAndMissingEntries()
+    {
+        var dotnetRoot = Path.Combine(_root, "valid-dotnet");
+        var missingRoot = Path.Combine(_root, "missing-dotnet");
+        var invalidEntry = $"bad{Path.GetInvalidPathChars()[0]}path";
+        var executableName = OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
+        var expected = Path.Combine(dotnetRoot, executableName);
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+        var resolved = InstallEnvironment.TryResolveDotnetPath(
+            name => name == "PATH"
+                ? string.Join(Path.PathSeparator, [invalidEntry, missingRoot, dotnetRoot])
+                : null,
+            OperatingSystem.IsWindows(),
+            path => string.Equals(Path.GetFullPath(path), Path.GetFullPath(dotnetRoot), comparison),
+            path => string.Equals(Path.GetFullPath(path), Path.GetFullPath(expected), comparison),
+            path => path);
+
+        Assert.Equal(expected, resolved, OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public void TryResolveDotnetPath_ReturnsNull_WhenPathDoesNotContainDotnet()
+    {
+        var missingRoot = Path.Combine(_root, "missing-dotnet");
+
+        var resolved = InstallEnvironment.TryResolveDotnetPath(
+            name => name == "PATH" ? missingRoot : null,
+            OperatingSystem.IsWindows(),
+            _ => false,
+            _ => false,
+            path => path);
+
+        Assert.Null(resolved);
     }
 
     [Fact]
