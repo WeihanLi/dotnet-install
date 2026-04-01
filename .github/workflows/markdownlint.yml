@@ -1,0 +1,40 @@
+name: Markdown Checks
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '**/*.md'
+      - '.markdownlint-cli2.yaml'
+      - '.github/workflows/markdownlint.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**/*.md'
+      - '.markdownlint-cli2.yaml'
+      - '.github/workflows/markdownlint.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  markdownlint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Run markdownlint
+        uses: DavidAnson/markdownlint-cli2-action@v20
+        with:
+          globs: |
+            **/*.md
+
+      - name: Check markdown links
+        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        with:
+          use-quiet-mode: "yes"
+          use-verbose-mode: "yes"
+          check-modified-files-only: "yes"
+          base-branch: "main"
