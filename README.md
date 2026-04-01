@@ -1,6 +1,6 @@
-# dotnet-install ![Build](https://github.com/WeihanLi/dotnet-install/actions/workflows/build.yml/badge.svg) [![NuGet Latest](https://img.shields.io/nuget/vpre/spark.dotnet-install)](https://www.nuget.org/packages/spark.dotnet-install/absoluteLatest)
+# dotnet-install ![Build](https://github.com/WeihanLi/dotnet-install/actions/workflows/build.yml/badge.svg) [![NuGet Latest](https://img.shields.io/nuget/v/spark.dotnet-install)](https://www.nuget.org/packages/spark.dotnet-install)
 
-Managed prototype of the `dotnet-install` shell scripts.
+Managed implementation of the `dotnet-install` shell scripts.
 
 This repository contains a .NET 10 command-line tool named `dotnet-install` that resolves .NET release metadata, builds an install plan, downloads the selected SDK or runtime artifact, extracts it into the target install root, verifies the result, and can update `PATH`. The goal is to preserve the behavior of `dotnet-install.sh` and `dotnet-install.ps1` while moving the implementation to managed code and NativeAOT-friendly settings.
 
@@ -25,6 +25,64 @@ Current behavior boundaries:
 - `--persist-path` also prepends the install root to the user `PATH` for new shells on Windows. It cannot be combined with `--no-path`, and it is not supported on non-Windows platforms
 - If another existing .NET installation is already discoverable from known locations, PATH mutation is skipped to avoid shadowing that install
 - `remove` infers whether `<version>` is an SDK version or a runtime version. SDK input removes `sdk/<sdk-version>` and its matching SDK `swidtag`, and unless `--sdk-only` is set also removes the corresponding runtime folders and companion assets when metadata resolution succeeds. Runtime input removes only the matching runtime folders and runtime-version companion assets. If SDK-to-runtime metadata cannot be resolved, the command logs that the runtime version must be removed separately. `--dry-run` lists the matching folders without deleting them
+
+## Install The Tool
+
+You can use `dotnet-install` in two supported ways:
+
+- As a .NET global or local tool from NuGet
+- As a single native executable downloaded from a GitHub release
+
+### Option 1: install from NuGet
+
+Install globally:
+
+```sh
+dotnet tool install --global spark.dotnet-install
+```
+
+Install into a local tool manifest:
+
+```sh
+dotnet new tool-manifest
+dotnet tool install --local spark.dotnet-install
+```
+
+Update an existing global install:
+
+```sh
+dotnet tool update --global spark.dotnet-install
+```
+
+Run it:
+
+```sh
+dotnet-install --help
+dotnet-install version
+```
+
+### Option 2: download a GitHub release binary
+
+Each GitHub release publishes a single-file executable per RID:
+
+- `dotnet-install-<version>-win-x64.exe`
+- `dotnet-install-<version>-win-arm64.exe`
+- `dotnet-install-<version>-linux-x64`
+- `dotnet-install-<version>-linux-arm64`
+- `dotnet-install-<version>-osx-arm64`
+
+Download the asset that matches the target machine, place it in a directory of your choice, and run it directly. On Linux and macOS, mark it executable first:
+
+```sh
+mv ./dotnet-install-<version>-<rid> ./dotnet-install
+chmod +x ./dotnet-install
+./dotnet-install --help
+./dotnet-install version
+```
+
+If you want to invoke the release binary as `dotnet-install` from any shell, rename it to `dotnet-install` (or `dotnet-install.exe` on Windows) and place that file in a directory that is already on your shell `PATH`.
+
+See [docs/github-releases.md](docs/github-releases.md) for a release-first setup guide.
 
 ## Requirements
 
@@ -97,7 +155,7 @@ dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --fram
 Preview the planned removal of an SDK:
 
 ```sh
-dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- remove 8.0.204
+dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- remove 8.0.204 --dry-run
 ```
 
 ## Command Surface
@@ -147,6 +205,41 @@ The `remove` subcommand currently accepts:
 - `--sdk-only`
 - `--dry-run`
 - `--verbose`
+
+## PATH Behavior
+
+`dotnet-install` manages two different PATH concerns:
+
+- The PATH used to locate the `dotnet-install` tool itself
+- The PATH used to locate the SDK/runtime installation root after the tool completes
+
+Tool acquisition from NuGet or GitHub Releases does not automatically change PATH for you. Put the tool binary in a directory that is already on PATH, or invoke it by full path.
+
+For SDK/runtime installs, the command behaves as follows:
+
+- By default it prepends the resolved install root to the current process `PATH`
+- `--no-path` disables all PATH mutation and prints the install location instead
+- `--persist-path` also prepends the install root to the user `PATH` for future shells on Windows
+- `--persist-path` is rejected on non-Windows platforms and cannot be combined with `--no-path`
+- PATH updates are skipped entirely when an existing .NET installation is already discoverable from the selected install root, `DOTNET_INSTALL_DIR`, `DOTNET_ROOT`, the current `dotnet` command location, or well-known default install roots
+- When PATH updates are skipped, installation still succeeds; the command prints the install location instead of shadowing another .NET installation
+
+## Remove Safety
+
+The `remove` command is destructive. Use `--dry-run` first when targeting a shared install root.
+
+Current safety rules:
+
+- Removal targets are resolved relative to the install root and rejected if they escape that root
+- `remove` does not modify process PATH, user PATH, shell profiles, or system-wide environment configuration
+- SDK removal starts with `sdk/<sdk-version>` and matching `swidtag` files
+- Unless `--sdk-only` is set, SDK removal can also remove matching runtime folders and companion assets such as `host/fxr`, `shared`, `packs`, `templates`, workload metadata, and sdk-manifest entries
+- When other SDK versions are still installed, shared companion targets are filtered so the command does not remove assets still referenced by those remaining SDK bands
+- Runtime-version input removes only runtime-related folders and companion assets for that runtime version
+- If SDK-to-runtime metadata cannot be resolved, the command warns and removes only SDK-specific paths
+- On Windows, permission failures can trigger a retry with administrator elevation
+- On Linux, permission failures include a `sudo dotnet-install remove <version>` hint
+- If no matching SDK or runtime paths are found under the install root, the command fails instead of silently succeeding
 
 ## Build, Test, Pack
 
