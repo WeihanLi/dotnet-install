@@ -28,6 +28,13 @@ public sealed class InstallLifecycleTests : IDisposable
     [Fact]
     public void ResolveInstallRoot_UsesDotNetLocationFromPath_WhenAuto()
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            // Skip on macOS where the system dotnet shim is always present on PATH and would interfere with the test
+            // build error example: https://github.com/WeihanLi/dotnet-install/actions/runs/23827004845/job/69452175751
+            return;
+        }
+
         Environment.SetEnvironmentVariable("DOTNET_INSTALL_DIR", null, EnvironmentVariableTarget.Process);
         Environment.SetEnvironmentVariable("DOTNET_ROOT", null, EnvironmentVariableTarget.Process);
 
