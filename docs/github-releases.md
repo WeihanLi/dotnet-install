@@ -22,14 +22,13 @@ Each binary asset is accompanied by a `.sha256` sidecar file containing its SHA-
 
 1. Download the `win-x64` or `win-arm64` `.exe` asset from the release page.
 2. Move it to a stable location such as `%USERPROFILE%\\bin\\dotnet-install.exe`.
-3. Run it directly:
+3. If you want `dotnet-install` available from any shell, add that directory to your user `PATH`.
+4. Run it directly:
 
 ```powershell
 .\dotnet-install.exe --help
 .\dotnet-install.exe version
 ```
-
-4. If you want `dotnet-install` available from any shell, add that directory to your user `PATH`.
 
 ## Linux And macOS
 
@@ -37,16 +36,16 @@ Each binary asset is accompanied by a `.sha256` sidecar file containing its SHA-
 2. Rename it to `dotnet-install` if you want a stable local command name.
 3. Mark it executable:
 
-```sh
-chmod +x ./dotnet-install
-```
+    ```sh
+    chmod +x ./dotnet-install
+    ```
 
 4. Run it:
 
-```sh
-./dotnet-install --help
-./dotnet-install version
-```
+    ```sh
+    ./dotnet-install --help
+    ./dotnet-install version
+    ```
 
 5. If you want it available globally, move it to a directory already on your `PATH`, such as `$HOME/.local/bin`.
 
