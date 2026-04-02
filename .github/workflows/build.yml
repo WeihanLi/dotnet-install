@@ -36,7 +36,8 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup .NET SDK
-        run: |
+        uses: actions/setup-dotnet@v5
+        with:
           dotnet-version: '10.0.x'
 
       - name: Display .NET info
@@ -46,4 +47,4 @@ jobs:
         run: dotnet build DotNetInstallManager.slnx
 
       - name: Test
-        run: dotnet test --no-build
+        run: dotnet test DotNetInstallManager.slnx --no-build

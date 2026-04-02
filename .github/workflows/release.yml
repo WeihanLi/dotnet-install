@@ -36,7 +36,6 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DOTNET_NOLOGO: '1'
       DOTNET_MULTILEVEL_LOOKUP: '0'
-      VERSION: ${{ github.event.inputs.version || github.event.release.tag_name || github.ref_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -46,16 +45,37 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Resolve release version
+        shell: pwsh
+        run: |
+          $rawVersion = '${{ github.event.inputs.version || github.event.release.tag_name || github.ref_name }}'.Trim()
+          if ([string]::IsNullOrWhiteSpace($rawVersion)) {
+            throw "A release version is required."
+          }
+
+          if ($rawVersion.StartsWith('refs/tags/')) {
+            $rawVersion = $rawVersion.Substring('refs/tags/'.Length)
+          }
+
+          $normalizedVersion = $rawVersion.StartsWith('v') ? $rawVersion.Substring(1) : $rawVersion
+          if ([string]::IsNullOrWhiteSpace($normalizedVersion)) {
+            throw "Resolved release version is empty."
+          }
+
+          "NORMALIZED_VERSION=$normalizedVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Build
-        run: dotnet build
+        run: dotnet build DotNetInstallManager.slnx -c Release -p:Version=${{ env.NORMALIZED_VERSION }}
 
       - name: Test
-        run: dotnet test
+        run: dotnet test DotNetInstallManager.slnx -c Release --no-build
 
       - name: Publish
         run: >-
           dotnet publish src/DotNetInstallManager/DotNetInstallManager.csproj
+          -c Release
           -p PublishAot=true
+          -p:Version=${{ env.NORMALIZED_VERSION }}
           --runtime ${{ matrix.rid }}
           -o "${{ github.workspace }}/artifacts/${{ matrix.rid }}/publish/"
 
@@ -63,7 +83,7 @@ jobs:
         shell: pwsh
         run: |
           $rid = '${{ matrix.rid }}'
-          $version = '${{ env.VERSION }}'
+          $version = '${{ env.NORMALIZED_VERSION }}'
           $publishDir = Join-Path $Env:GITHUB_WORKSPACE "artifacts/$rid/publish"
           if (-not (Test-Path $publishDir)) {
             throw "Publish directory not found: $publishDir"
@@ -82,17 +102,19 @@ jobs:
           }
           $artifactPath = Join-Path $artifactDir $artifactName
           Copy-Item -LiteralPath $binaryPath -Destination $artifactPath -Force
+          $hash = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $artifactName" | Set-Content -LiteralPath "$artifactPath.sha256" -NoNewline
           Write-Host "Staged $artifactPath"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v7
         with:
-          name: dotnet-install-${{ env.VERSION }}-${{ matrix.rid }}
-          path: artifacts/${{ matrix.rid }}/dotnet-install-${{ env.VERSION }}-${{ matrix.rid }}*
+          name: dotnet-install-${{ env.NORMALIZED_VERSION }}-${{ matrix.rid }}
+          path: artifacts/${{ matrix.rid }}/dotnet-install-${{ env.NORMALIZED_VERSION }}-${{ matrix.rid }}*
           if-no-files-found: error
 
       - name: Attach to GitHub release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/${{ matrix.rid }}/dotnet-install-${{ env.VERSION }}-${{ matrix.rid }}*
+          files: artifacts/${{ matrix.rid }}/dotnet-install-${{ env.NORMALIZED_VERSION }}-${{ matrix.rid }}*

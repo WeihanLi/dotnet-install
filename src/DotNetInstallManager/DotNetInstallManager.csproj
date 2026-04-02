@@ -17,10 +17,11 @@
 
   <PropertyGroup>
     <PackageIcon>icon.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>install;setup;dotnet;sdk;runtime</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/WeihanLi/dotnet-install</PackageProjectUrl>
-    <PackageReleaseNotes>init</PackageReleaseNotes>
+    <PackageReleaseNotes>See the repository release notes for release-specific changes.</PackageReleaseNotes>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
   </PropertyGroup>
@@ -48,6 +49,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)../../README.md" Pack="true" PackagePath="\" Link="README.md" />
     <PackageReference Include="System.CommandLine" />
   </ItemGroup>
 

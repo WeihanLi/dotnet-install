@@ -16,6 +16,8 @@ Select the release asset that matches the target machine:
 
 The asset is the executable itself. It is not wrapped in a `.zip` or `.tar.gz`.
 
+Each binary asset is accompanied by a `.sha256` sidecar file containing its SHA-256 digest.
+
 ## Windows
 
 1. Download the `win-x64` or `win-arm64` `.exe` asset from the release page.
@@ -58,6 +60,18 @@ dotnet-install --help
 ```
 
 If the command is not found, the binary directory is not on your shell `PATH`. Run the file by path or add its directory to PATH explicitly.
+
+If you want to verify the download before running it, compare the asset against its matching `.sha256` file. For example:
+
+```powershell
+Get-FileHash .\dotnet-install-<version>-win-x64.exe -Algorithm SHA256
+Get-Content .\dotnet-install-<version>-win-x64.exe.sha256
+```
+
+```sh
+sha256sum dotnet-install-<version>-linux-x64
+cat dotnet-install-<version>-linux-x64.sha256
+```
 
 ## Using The Tool After Download
 

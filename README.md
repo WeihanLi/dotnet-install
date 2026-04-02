@@ -83,6 +83,7 @@ chmod +x ./dotnet-install
 If you want to invoke the release binary as `dotnet-install` from any shell, rename it to `dotnet-install` (or `dotnet-install.exe` on Windows) and place that file in a directory that is already on your shell `PATH`.
 
 See [docs/github-releases.md](docs/github-releases.md) for a release-first setup guide.
+See [docs/releasing.md](docs/releasing.md) for the maintainer release checklist.
 
 ## Requirements
 
