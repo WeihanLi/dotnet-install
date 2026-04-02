@@ -1,0 +1,73 @@
+name: setup-dotnet-install
+description: Install a .NET SDK by downloading this repository's dotnet-install release binary and using it to provision a local SDK.
+
+inputs:
+  version:
+    description: .NET SDK version selector to install, for example 10.0.201 or 10.0.x
+    required: true
+  install-dir:
+    description: Install directory for the SDK. Defaults to a temp folder under the runner temp directory.
+    required: false
+    default: ''
+  cache:
+    description: Cache the install directory between workflow runs.
+    required: false
+    default: 'true'
+
+outputs:
+  resolved-version:
+    description: Resolved SDK version selected by dotnet-install.
+    value: ${{ steps.install.outputs.resolved-version }}
+  install-dir:
+    description: Absolute install directory used for the SDK.
+    value: ${{ steps.install.outputs.install-dir }}
+  dotnet-root:
+    description: DOTNET_ROOT value exported for subsequent steps.
+    value: ${{ steps.install.outputs.dotnet-root }}
+  dotnet-info:
+    description: Output of dotnet --info from the installed SDK.
+    value: ${{ steps.install.outputs.dotnet-info }}
+
+runs:
+  using: composite
+  steps:
+    - id: prepare
+      name: Resolve setup parameters
+      shell: pwsh
+      env:
+        ACTION_REPOSITORY: ${{ github.action_repository }}
+        ACTION_REF: ${{ github.action_ref }}
+        RUNNER_OS_NAME: ${{ runner.os }}
+        RUNNER_ARCH_NAME: ${{ runner.arch }}
+        RUNNER_TEMP_DIR: ${{ runner.temp }}
+      run: |
+        & "${{ github.action_path }}/scripts/github-actions/Resolve-SetupDotNetInstallAction.ps1" `
+          -Version '${{ inputs.version }}' `
+          -InstallDir '${{ inputs.install-dir }}' `
+          -ActionRepository $env:ACTION_REPOSITORY `
+          -ActionRef $env:ACTION_REF `
+          -RunnerOs $env:RUNNER_OS_NAME `
+          -RunnerArch $env:RUNNER_ARCH_NAME `
+          -TempDirectory $env:RUNNER_TEMP_DIR
+
+    - name: Restore SDK cache
+      if: ${{ inputs.cache == 'true' }}
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.prepare.outputs.install-dir }}
+        key: ${{ steps.prepare.outputs.cache-key }}
+
+    - id: install
+      name: Install SDK via dotnet-install release artifact
+      shell: pwsh
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        RUNNER_OS_NAME: ${{ runner.os }}
+      run: |
+        & "${{ github.action_path }}/scripts/github-actions/Install-DotNetSdkFromRelease.ps1" `
+          -RequestedVersion '${{ inputs.version }}' `
+          -InstallDir '${{ steps.prepare.outputs.install-dir }}' `
+          -ToolPath '${{ steps.prepare.outputs.tool-path }}' `
+          -DownloadUrl '${{ steps.prepare.outputs.download-url }}' `
+          -Sha256Url '${{ steps.prepare.outputs.sha256-url }}' `
+          -RunnerOs $env:RUNNER_OS_NAME

@@ -85,6 +85,40 @@ If you want to invoke the release binary as `dotnet-install` from any shell, ren
 See [docs/github-releases.md](docs/github-releases.md) for a release-first setup guide.
 See [docs/releasing.md](docs/releasing.md) for the maintainer release checklist.
 
+## GitHub Action
+
+This repository also ships a first-party composite action at [action.yml](action.yml) for workflows that want to install an SDK through this repo's managed `dotnet-install` release binary instead of `actions/setup-dotnet`.
+
+When the action is used from a release tag such as `@v1`, it downloads the matching release binary for that action version. If it is used from a branch or local path, it falls back to the latest published GitHub release.
+
+Example usage:
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: WeihanLi/dotnet-install@v1
+        id: setup-dotnet
+        with:
+          version: 10.0.x
+      - run: dotnet --info
+```
+
+Action inputs:
+
+- `version` required SDK version selector such as `10.0.201` or `10.0.x`
+- `install-dir` optional SDK install location
+- `cache` optional `true` or `false`, defaults to `true`
+
+Action outputs:
+
+- `resolved-version`
+- `install-dir`
+- `dotnet-root`
+- `dotnet-info`
+
 ## Requirements
 
 - .NET 10 SDK or newer
