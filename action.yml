@@ -1,5 +1,8 @@
 name: setup-dotnet-install
 description: Install a .NET SDK by downloading this repository's dotnet-install release binary and using it to provision a local SDK.
+branding:
+  icon: 'chevron-right'
+  color: 'black'
 
 inputs:
   version:
@@ -9,10 +12,6 @@ inputs:
     description: Install directory for the SDK. Defaults to a temp folder under the runner temp directory.
     required: false
     default: ''
-  cache:
-    description: Cache the install directory between workflow runs.
-    required: false
-    default: 'true'
 
 outputs:
   resolved-version:
@@ -24,9 +23,9 @@ outputs:
   dotnet-root:
     description: DOTNET_ROOT value exported for subsequent steps.
     value: ${{ steps.install.outputs.dotnet-root }}
-  dotnet-info:
-    description: Output of dotnet --info from the installed SDK.
-    value: ${{ steps.install.outputs.dotnet-info }}
+  dotnet-path:
+    description: Output of dotnet executable binary path
+    value: ${{ steps.install.outputs.dotnet-path }}
 
 runs:
   using: composite
@@ -49,13 +48,6 @@ runs:
           -RunnerOs $env:RUNNER_OS_NAME `
           -RunnerArch $env:RUNNER_ARCH_NAME `
           -TempDirectory $env:RUNNER_TEMP_DIR
-
-    - name: Restore SDK cache
-      if: ${{ inputs.cache == 'true' }}
-      uses: actions/cache@v4
-      with:
-        path: ${{ steps.prepare.outputs.install-dir }}
-        key: ${{ steps.prepare.outputs.cache-key }}
 
     - id: install
       name: Install SDK via dotnet-install release artifact

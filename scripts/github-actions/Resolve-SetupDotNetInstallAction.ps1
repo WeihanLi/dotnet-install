@@ -162,4 +162,3 @@ Write-ActionOutput -Name 'install-dir' -Value $resolvedInstallDir
 Write-ActionOutput -Name 'tool-path' -Value $toolPath
 Write-ActionOutput -Name 'download-url' -Value "$downloadBase/$assetName"
 Write-ActionOutput -Name 'sha256-url' -Value "$downloadBase/$assetName.sha256"
-Write-ActionOutput -Name 'cache-key' -Value $cacheKey

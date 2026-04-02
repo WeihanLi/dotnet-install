@@ -181,7 +181,6 @@ $env:DOTNET_ROOT = $InstallDir
 $env:DOTNET_INSTALL_DIR = $InstallDir
 $env:PATH = "$InstallDir$([System.IO.Path]::PathSeparator)$env:PATH"
 
-$dotnetInfo = (& $dotnetExecutable --info 2>&1 | ForEach-Object { "$_" }) -join [Environment]::NewLine
 $installedSdks = (& $dotnetExecutable --list-sdks 2>&1 | ForEach-Object { "$_" }) -join [Environment]::NewLine
 if ($installedSdks -notmatch "(?m)^$([regex]::Escape($resolvedVersion))\s+\[") {
     throw "The installed dotnet host does not report SDK version '$resolvedVersion'.`n$installedSdks"
@@ -194,4 +193,4 @@ Add-PathEntry -PathEntry $InstallDir
 Write-ActionOutput -Name 'resolved-version' -Value $resolvedVersion
 Write-ActionOutput -Name 'install-dir' -Value $InstallDir
 Write-ActionOutput -Name 'dotnet-root' -Value $InstallDir
-Write-MultilineActionOutput -Name 'dotnet-info' -Value $dotnetInfo
+Write-ActionOutput -Name 'dotnet-path' -Value $dotnetExecutable

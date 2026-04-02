@@ -117,7 +117,7 @@ Action outputs:
 - `resolved-version`
 - `install-dir`
 - `dotnet-root`
-- `dotnet-info`
+- `dotnet-path`
 
 ## Requirements
 
