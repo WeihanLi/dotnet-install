@@ -142,25 +142,25 @@ dotnet build DotNetInstallManager.slnx
 Run the CLI help:
 
 ```sh
-dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- --help
+dotnet-install --help
 ```
 
 Show the tool version:
 
 ```sh
-dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- version
+dotnet-install version
 ```
 
 Generate an install plan without downloading:
 
 ```sh
-dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- --dry-run --channel LTS
+dotnet-install --dry-run --channel LTS
 ```
 
 Select the latest matching SDK from a version train:
 
 ```sh
-dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- --version 10.0.x
+dotnet-install --version 10.0.x
 ```
 
 Example output:
@@ -178,19 +178,19 @@ DryRun: True | KeepZip: False | ZipPath: <temp>
 Download an SDK archive:
 
 ```sh
-dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- --channel LTS --version Latest
+dotnet-install --version 11.0.x
 ```
 
 Install and persist the location into the user `PATH` on Windows:
 
 ```sh
-dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- --channel LTS --persist-path
+dotnet-install --channel LTS --persist-path
 ```
 
 Preview the planned removal of an SDK:
 
 ```sh
-dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- remove 8.0.204 --dry-run
+dotnet-install remove 8.0.204 --dry-run
 ```
 
 ## Command Surface
