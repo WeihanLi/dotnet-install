@@ -241,7 +241,15 @@ foreach ($version in $requestedVersions) {
     ))
 }
 
-$dotnetExecutableName = if ($RunnerOs -eq 'Windows') { 'dotnet.exe' } else { 'dotnet' }
+$dotnetExecutableName = if (-not [string]::IsNullOrWhiteSpace($env:DOTNET_INSTALL_ACTION_DOTNET_EXECUTABLE_NAME)) {
+    $env:DOTNET_INSTALL_ACTION_DOTNET_EXECUTABLE_NAME
+}
+elseif ($RunnerOs -eq 'Windows') {
+    'dotnet.exe'
+}
+else {
+    'dotnet'
+}
 $dotnetExecutable = Join-Path -Path $InstallDir -ChildPath $dotnetExecutableName
 Write-Diagnostic "Expected dotnet executable path='$dotnetExecutable'"
 if (-not (Test-Path -LiteralPath $dotnetExecutable)) {

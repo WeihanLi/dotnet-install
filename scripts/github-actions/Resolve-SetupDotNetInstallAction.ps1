@@ -116,6 +116,14 @@ function New-GitHubApiHeaders {
     return $headers
 }
 
+function Get-GitHubApiBaseUrl {
+    if (-not [string]::IsNullOrWhiteSpace($env:DOTNET_INSTALL_ACTION_GITHUB_API_BASE_URL)) {
+        return $env:DOTNET_INSTALL_ACTION_GITHUB_API_BASE_URL.TrimEnd('/')
+    }
+
+    return 'https://api.github.com'
+}
+
 function Get-LatestRelease {
     param([string]$Repository)
 
@@ -124,9 +132,10 @@ function Get-LatestRelease {
     }
 
     $headers = New-GitHubApiHeaders
+    $apiBaseUrl = Get-GitHubApiBaseUrl
 
     try {
-        return Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$Repository/releases/latest"
+        return Invoke-RestMethod -Headers $headers -Uri "$apiBaseUrl/repos/$Repository/releases/latest"
     }
     catch {
         throw "Failed to resolve the latest release for '$Repository'. Use the action from a version tag or publish a GitHub release first. $($_.Exception.Message)"
@@ -146,9 +155,10 @@ function Get-LatestPublishedRelease {
     }
 
     $headers = New-GitHubApiHeaders
+    $apiBaseUrl = Get-GitHubApiBaseUrl
 
     try {
-        $response = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$Repository/releases"
+        $response = Invoke-RestMethod -Headers $headers -Uri "$apiBaseUrl/repos/$Repository/releases?per_page=20"
     }
     catch {
         throw "Failed to enumerate releases for '$Repository'. $($_.Exception.Message)"
