@@ -49,7 +49,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="$(MSBuildThisFileDirectory)../../README.md" Pack="true" PackagePath="\" Link="README.md" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
     <PackageReference Include="System.CommandLine" />
   </ItemGroup>
 
