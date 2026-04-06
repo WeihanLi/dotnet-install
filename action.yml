@@ -34,6 +34,7 @@ runs:
       name: Resolve setup parameters
       shell: pwsh
       env:
+        GITHUB_TOKEN: ${{ github.token }}
         ACTION_REPOSITORY: ${{ github.action_repository }}
         ACTION_REF: ${{ github.action_ref }}
         RUNNER_OS_NAME: ${{ runner.os }}
