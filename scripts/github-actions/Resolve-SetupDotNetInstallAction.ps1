@@ -24,6 +24,8 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+# Local-path usage does not carry a stable action repository identity, so fall back to the
+# canonical published release source for the binary while keeping the local script logic.
 $defaultActionRepository = 'WeihanLi/dotnet-install'
 
 function Write-ActionOutput {
@@ -42,7 +44,17 @@ function Write-ActionOutput {
     Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "$Name=$Value"
 }
 
+function Write-Diagnostic {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+
+    Write-Host "[dotnet-install-action] $Message"
+}
+
 function Resolve-RuntimeIdentifier {
+    # Match the release artifact RID names produced by the publish workflow.
     switch ($RunnerOs) {
         'Windows' {
             switch ($RunnerArch) {
@@ -91,13 +103,7 @@ function Is-VersionTag {
     return $Tag -match '^[vV]?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$'
 }
 
-function Get-LatestReleaseTag {
-    param([string]$Repository)
-
-    if ([string]::IsNullOrWhiteSpace($Repository)) {
-        throw 'Unable to resolve the action repository for release lookup.'
-    }
-
+function New-GitHubApiHeaders {
     $headers = @{
         'User-Agent' = 'dotnet-install-action'
         'Accept' = 'application/vnd.github+json'
@@ -107,18 +113,7 @@ function Get-LatestReleaseTag {
         $headers['Authorization'] = "Bearer $($env:GITHUB_TOKEN)"
     }
 
-    try {
-        $release = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$Repository/releases/latest"
-    }
-    catch {
-        throw "Failed to resolve the latest release for '$Repository'. Use the action from a version tag or publish a GitHub release first. $($_.Exception.Message)"
-    }
-
-    if ([string]::IsNullOrWhiteSpace($release.tag_name)) {
-        throw "The latest release for '$Repository' does not contain a tag name."
-    }
-
-    return $release.tag_name
+    return $headers
 }
 
 function Get-LatestRelease {
@@ -128,14 +123,7 @@ function Get-LatestRelease {
         throw 'Unable to resolve the action repository for release lookup.'
     }
 
-    $headers = @{
-        'User-Agent' = 'dotnet-install-action'
-        'Accept' = 'application/vnd.github+json'
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_TOKEN)) {
-        $headers['Authorization'] = "Bearer $($env:GITHUB_TOKEN)"
-    }
+    $headers = New-GitHubApiHeaders
 
     try {
         return Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$Repository/releases/latest"
@@ -143,6 +131,47 @@ function Get-LatestRelease {
     catch {
         throw "Failed to resolve the latest release for '$Repository'. Use the action from a version tag or publish a GitHub release first. $($_.Exception.Message)"
     }
+}
+
+function Get-LatestPublishedRelease {
+    param([string]$Repository)
+
+    try {
+        $stableRelease = Get-LatestRelease -Repository $Repository
+        Write-Diagnostic "Resolved latest stable release '${stableRelease.tag_name}'."
+        return $stableRelease
+    }
+    catch {
+        Write-Diagnostic "Latest stable release lookup failed: $($_.Exception.Message)"
+    }
+
+    $headers = New-GitHubApiHeaders
+
+    try {
+        $releases = @(Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$Repository/releases?per_page=20")
+    }
+    catch {
+        throw "Failed to enumerate releases for '$Repository'. $($_.Exception.Message)"
+    }
+
+    $publishedReleases = @($releases | Where-Object { -not $_.draft })
+    if ($publishedReleases.Count -eq 0) {
+        throw "No published releases were found for '$Repository'. Publish a stable or prerelease first."
+    }
+
+    $stableRelease = $publishedReleases | Where-Object { -not $_.prerelease } | Select-Object -First 1
+    if ($null -ne $stableRelease) {
+        Write-Diagnostic "Resolved latest stable release '${stableRelease.tag_name}' from release listing fallback."
+        return $stableRelease
+    }
+
+    $previewRelease = $publishedReleases | Where-Object { $_.prerelease } | Select-Object -First 1
+    if ($null -eq $previewRelease) {
+        throw "No stable or prerelease releases were found for '$Repository'."
+    }
+
+    Write-Diagnostic "Falling back to latest prerelease '${previewRelease.tag_name}'."
+    return $previewRelease
 }
 
 function Get-ReleaseAssetName {
@@ -174,6 +203,7 @@ function Get-ReleaseAssetInfo {
         throw 'The latest release does not contain a tag name.'
     }
 
+    # Release assets are versioned by the normalized tag without the leading 'v'.
     $normalizedVersion = $Release.tag_name.TrimStart('v', 'V')
     $assetName = Get-ReleaseAssetName -Version $normalizedVersion -RuntimeIdentifier $RuntimeIdentifier
     $sha256Name = "$assetName.sha256"
@@ -202,30 +232,45 @@ $runtimeIdentifier = Resolve-RuntimeIdentifier
 $isLocalAction = [string]::IsNullOrWhiteSpace($ActionRepository)
 $resolvedActionRepository = if ($isLocalAction) { $defaultActionRepository } else { $ActionRepository }
 
+Write-Diagnostic "ActionRepository='${ActionRepository}'"
+Write-Diagnostic "ActionRef='${ActionRef}'"
+Write-Diagnostic "GitHubRepository='${env:GITHUB_REPOSITORY}'"
+Write-Diagnostic "RunnerOs='${RunnerOs}' RunnerArch='${RunnerArch}' RuntimeIdentifier='${runtimeIdentifier}'"
+Write-Diagnostic "IsLocalAction='${isLocalAction}' ResolvedActionRepository='${resolvedActionRepository}'"
+
 if ($isLocalAction) {
-    $latestRelease = Get-LatestRelease -Repository $defaultActionRepository
+    # For `uses: ./`, always pair the checked-out action scripts with the latest published binary.
+    Write-Diagnostic "Using local action scripts with the latest published release binary."
+    $latestRelease = Get-LatestPublishedRelease -Repository $defaultActionRepository
     $assetInfo = Get-ReleaseAssetInfo -Release $latestRelease -RuntimeIdentifier $runtimeIdentifier
     $tag = $assetInfo.Tag
     $normalizedToolVersion = $assetInfo.NormalizedVersion
     $downloadUrl = $assetInfo.DownloadUrl
     $sha256Url = $assetInfo.Sha256Url
+    Write-Diagnostic "Resolved latest release tag '${tag}' for local action mode."
 }
 else {
     $tag = Normalize-Tag -Tag $ActionRef
+    Write-Diagnostic "Normalized action ref to '${tag}'."
     if (-not (Is-VersionTag -Tag $tag)) {
-        $latestRelease = Get-LatestRelease -Repository $resolvedActionRepository
+        # Branch refs and mutable refs do not map to a unique release asset, so use the latest release.
+        Write-Diagnostic "Action ref is not a version tag. Falling back to the latest published release binary."
+        $latestRelease = Get-LatestPublishedRelease -Repository $resolvedActionRepository
         $assetInfo = Get-ReleaseAssetInfo -Release $latestRelease -RuntimeIdentifier $runtimeIdentifier
         $tag = $assetInfo.Tag
         $normalizedToolVersion = $assetInfo.NormalizedVersion
         $downloadUrl = $assetInfo.DownloadUrl
         $sha256Url = $assetInfo.Sha256Url
+        Write-Diagnostic "Resolved latest release tag '${tag}' for non-tag action ref."
     }
     else {
+        # Tagged action usage is deterministic and can point directly at the matching release asset.
         $normalizedToolVersion = $tag.TrimStart('v', 'V')
         $assetName = Get-ReleaseAssetName -Version $normalizedToolVersion -RuntimeIdentifier $runtimeIdentifier
         $downloadBase = "https://github.com/$resolvedActionRepository/releases/download/$tag"
         $downloadUrl = "$downloadBase/$assetName"
         $sha256Url = "$downloadBase/$assetName.sha256"
+        Write-Diagnostic "Using release-tag mode with asset '${assetName}'."
     }
 }
 
@@ -245,6 +290,12 @@ New-Item -ItemType Directory -Path $resolvedInstallDir -Force | Out-Null
 $toolExecutableName = if ($isWindowsRid) { 'dotnet-install.exe' } else { 'dotnet-install' }
 $toolPath = Join-Path -Path $toolDirectory -ChildPath $toolExecutableName
 $cacheKey = "dotnet-install-action|$resolvedActionRepository|$normalizedToolVersion|$runtimeIdentifier|$Version"
+
+Write-Diagnostic "RequestedVersionInput='${Version}'"
+Write-Diagnostic "ResolvedInstallDir='${resolvedInstallDir}'"
+Write-Diagnostic "ToolPath='${toolPath}'"
+Write-Diagnostic "DownloadUrl='${downloadUrl}'"
+Write-Diagnostic "Sha256Url='${sha256Url}'"
 
 Write-ActionOutput -Name 'install-dir' -Value $resolvedInstallDir
 Write-ActionOutput -Name 'tool-path' -Value $toolPath

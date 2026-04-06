@@ -63,6 +63,7 @@ function Split-RequestedVersions {
         [string]$VersionText
     )
 
+    # GitHub Actions preserves multiline inputs as a single string; split on lines and ignore blanks.
     return @(
         $VersionText -split "\r?\n" |
         ForEach-Object { $_.Trim() } |
@@ -105,6 +106,7 @@ function Invoke-Download {
         [string]$DestinationPath
     )
 
+    # GitHub-hosted release downloads accept the workflow token when one is available.
     $headers = @{
         'User-Agent' = 'dotnet-install-action'
         'Accept' = 'application/octet-stream'
@@ -143,6 +145,7 @@ function Resolve-RequestedSdkVersion {
         [string]$Version
     )
 
+    # Resolve selectors such as `10.0.x` to the concrete SDK version before installation.
     $dryRunOutput = Invoke-Tool -Arguments @(
         '--dry-run',
         '--version', $Version,
@@ -196,6 +199,7 @@ foreach ($version in $requestedVersions) {
     $resolvedVersion = Resolve-RequestedSdkVersion -Version $version
     $resolvedVersions.Add($resolvedVersion)
 
+    # Different selectors can converge on the same concrete SDK; install it only once.
     if (-not $installedResolvedVersions.Add($resolvedVersion)) {
         Write-Host "SDK version '$resolvedVersion' was already requested earlier in this action run. Skipping duplicate install."
         continue
@@ -220,6 +224,7 @@ $env:DOTNET_INSTALL_DIR = $InstallDir
 $env:PATH = "$InstallDir$([System.IO.Path]::PathSeparator)$env:PATH"
 
 $installedSdks = (& $dotnetExecutable --list-sdks 2>&1 | ForEach-Object { "$_" }) -join [Environment]::NewLine
+# Verify every resolved SDK against the installed host, not just the last one.
 foreach ($resolvedVersion in $resolvedVersions) {
     if ($installedSdks -notmatch "(?m)^$([regex]::Escape($resolvedVersion))\s+\[") {
         throw "The installed dotnet host does not report SDK version '$resolvedVersion'.`n$installedSdks"
