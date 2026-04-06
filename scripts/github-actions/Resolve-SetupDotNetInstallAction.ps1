@@ -148,24 +148,37 @@ function Get-LatestPublishedRelease {
     $headers = New-GitHubApiHeaders
 
     try {
-        $releases = @(Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$Repository/releases?per_page=20")
+        $response = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$Repository/releases"
     }
     catch {
         throw "Failed to enumerate releases for '$Repository'. $($_.Exception.Message)"
     }
 
-    $publishedReleases = @($releases | Where-Object { -not $_.draft })
+    $releases = @($response)
+    Write-Diagnostic "Enumerated $($releases.Count) release entries from the releases API."
+    foreach ($release in $releases) {
+        if ($null -ne $release) {
+            Write-Diagnostic "Release candidate tag='$($release.tag_name)' draft='$($release.draft)' prerelease='$($release.prerelease)'"
+        }
+    }
+
+    $publishedReleases = @($releases | Where-Object {
+        $null -ne $_ -and
+        $_.PSObject.Properties.Name -contains 'tag_name' -and
+        -not [bool]$_.draft
+    })
+    Write-Diagnostic "Published release candidates after draft filtering: $($publishedReleases.Count)"
     if ($publishedReleases.Count -eq 0) {
         throw "No published releases were found for '$Repository'. Publish a stable or prerelease first."
     }
 
-    $stableRelease = $publishedReleases | Where-Object { -not $_.prerelease } | Select-Object -First 1
+    $stableRelease = $publishedReleases | Where-Object { -not [bool]$_.prerelease } | Select-Object -First 1
     if ($null -ne $stableRelease) {
         Write-Diagnostic "Resolved latest stable release '${stableRelease.tag_name}' from release listing fallback."
         return $stableRelease
     }
 
-    $previewRelease = $publishedReleases | Where-Object { $_.prerelease } | Select-Object -First 1
+    $previewRelease = $publishedReleases | Where-Object { [bool]$_.prerelease } | Select-Object -First 1
     if ($null -eq $previewRelease) {
         throw "No stable or prerelease releases were found for '$Repository'."
     }
