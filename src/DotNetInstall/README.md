@@ -1,25 +1,10 @@
 # dotnet-install
 
-`dotnet-install` is a .NET global tool that aims to mirror the behavior of `dotnet-install.sh` and `dotnet-install.ps1` in managed code.
+Managed `dotnet-install` for developers who want the familiar shell-script workflow in a compiled CLI.
 
-The tool currently does these parts well:
+The tool resolves .NET release metadata, builds an install plan, downloads the selected SDK or runtime artifact, and runs the install flow from a single command.
 
-- Binds and validates CLI options with `System.CommandLine`
-- Resolves .NET release metadata
-- Builds an install plan for SDK and runtime requests
-- Downloads, extracts, and verifies the selected SDK or runtime archive
-- Supports feed, proxy, and timeout overrides
-- Updates the current process `PATH`, with optional user PATH persistence on Windows
-- Removes installed SDK/runtime folders and companion assets under the install root
-
-Current limitations:
-
-- `--dry-run` stops after plan generation
-- User PATH persistence is supported only on Windows
-- PATH updates are skipped when another existing .NET installation is already discoverable, to avoid shadowing it
-- `remove` is destructive and should be previewed with `--dry-run` first when targeting a shared install root
-
-## Install
+## Get Started
 
 Install as a global tool:
 
@@ -27,48 +12,72 @@ Install as a global tool:
 dotnet tool install --global spark.dotnet-install
 ```
 
-Install into a local tool manifest:
+Or install into a local tool manifest:
 
 ```bash
 dotnet new tool-manifest
 dotnet tool install --local spark.dotnet-install
 ```
 
-## Usage
-
-Show help:
+Then start with the commands most people need:
 
 ```bash
 dotnet-install --help
-```
-
-Print the tool version:
-
-```bash
 dotnet-install version
-```
-
-Generate an install plan without downloading:
-
-```bash
 dotnet-install --dry-run --channel LTS
-```
-
-Download the selected archive:
-
-```bash
 dotnet-install --version 10.0.x
 ```
 
-Preview a remove plan:
+## Common Tasks
+
+Install the latest LTS SDK:
+
+```bash
+dotnet-install --channel LTS
+```
+
+Install a specific SDK exactly:
+
+```bash
+dotnet-install --version 10.0.201
+```
+
+Install only a runtime:
+
+```bash
+dotnet-install --runtime aspnetcore --version 10.0.x
+```
+
+Install into a custom directory:
+
+```bash
+dotnet-install --version 10.0.x --install-dir ./tools/dotnet
+```
+
+Preview a removal before deleting anything:
 
 ```bash
 dotnet-install remove 8.0.204 --dry-run
 ```
+
+## Highlights
+
+- Familiar `dotnet-install` semantics in managed code
+- Strong option binding and validation with `System.CommandLine`
+- Channel, exact-version, and wildcard version selection
+- Download, extraction, install verification, and feed/proxy override support
+- PATH updates for the current process, with optional user PATH persistence on Windows
+
+## Notes
+
+- `--dry-run` stops after plan generation
+- `--persist-path` is supported only on Windows and cannot be combined with `--no-path`
+- If another .NET installation is already discoverable, PATH mutation is skipped to avoid shadowing it
+- `remove` is destructive and should be previewed with `--dry-run` first
 
 ## Project
 
 - Package: `spark.dotnet-install`
 - Repository: `https://github.com/WeihanLi/dotnet-install`
 
-See the repository README for source, development, and release details.
+See the repository README for source, development, GitHub Action, and release details.

@@ -1,30 +1,8 @@
 # dotnet-install ![Build](https://github.com/WeihanLi/dotnet-install/actions/workflows/build.yml/badge.svg) [![NuGet Latest](https://img.shields.io/nuget/v/spark.dotnet-install)](https://www.nuget.org/packages/spark.dotnet-install)
 
-Managed implementation of the `dotnet-install` shell scripts.
+Managed `dotnet-install` for developers who want the familiar shell-script workflow in a compiled, NativeAOT-oriented CLI.
 
-This repository contains a .NET 10 command-line tool named `dotnet-install` that resolves .NET release metadata, builds an install plan, downloads the selected SDK or runtime artifact, extracts it into the target install root, verifies the result, and can update `PATH`. The goal is to preserve the behavior of `dotnet-install.sh` and `dotnet-install.ps1` while moving the implementation to managed code and NativeAOT-friendly settings.
-
-## Status
-
-The current implementation is usable for:
-
-- Command-line parsing and validation with `System.CommandLine`
-- Channel, quality, exact version, and wildcard version selection
-- Existing-install detection with confirmation prompts
-- Release metadata lookup
-- RID resolution and candidate URL generation
-- Artifact download, extraction, verification, and feed/proxy override options
-- PATH updates for the current process, plus optional user PATH persistence on Windows
-- Removal of installed SDK/runtime folders and related assets under the install root
-
-Current behavior boundaries:
-
-- `--dry-run` stops after install plan generation
-- Non-dry-run install downloads the archive, extracts it into the resolved install root, verifies the installed SDK/runtime folder, and updates `PATH` for the current process unless `--no-path` is set
-- If the requested SDK/runtime version is already installed, the command warns and asks for confirmation unless `--yes` is set. In CI, `--yes` defaults to `true`
-- `--persist-path` also prepends the install root to the user `PATH` for new shells on Windows. It cannot be combined with `--no-path`, and it is not supported on non-Windows platforms
-- If another existing .NET installation is already discoverable from known locations, PATH mutation is skipped to avoid shadowing that install
-- `remove` infers whether `<version>` is an SDK version or a runtime version. SDK input removes `sdk/<sdk-version>` and its matching SDK `swidtag`, and unless `--sdk-only` is set also removes the corresponding runtime folders and companion assets when metadata resolution succeeds. Runtime input removes only the matching runtime folders and runtime-version companion assets. If SDK-to-runtime metadata cannot be resolved, the command logs that the runtime version must be removed separately. `--dry-run` lists the matching folders without deleting them
+`dotnet-install` resolves .NET release metadata, builds an install plan, downloads the selected SDK or runtime artifact, and runs the install flow from a single command. The project aims to stay close to `dotnet-install.sh` and `dotnet-install.ps1` while making the developer experience easier to inspect, test, and automate.
 
 ## Install The Tool
 
@@ -33,7 +11,7 @@ You can use `dotnet-install` in two supported ways:
 - As a .NET global or local tool from NuGet
 - As a single native executable downloaded from a GitHub release
 
-### Option 1: install from NuGet
+### Option 1: Install From NuGet
 
 Install globally:
 
@@ -54,14 +32,7 @@ Update an existing global install:
 dotnet tool update --global spark.dotnet-install
 ```
 
-Run it:
-
-```sh
-dotnet-install --help
-dotnet-install version
-```
-
-### Option 2: download a GitHub release binary
+### Option 2: Download A GitHub Release Binary
 
 Each GitHub release publishes a single-file executable per RID:
 
@@ -83,7 +54,91 @@ chmod +x ./dotnet-install
 If you want to invoke the release binary as `dotnet-install` from any shell, rename it to `dotnet-install` (or `dotnet-install.exe` on Windows) and place that file in a directory that is already on your shell `PATH`.
 
 See [docs/github-releases.md](docs/github-releases.md) for a release-first setup guide.
-See [docs/releasing.md](docs/releasing.md) for the maintainer release checklist.
+
+## Get Started
+
+Install the tool:
+
+```sh
+dotnet tool install --global spark.dotnet-install
+```
+
+Then use the commands most developers need first:
+
+```sh
+# Explore the CLI
+dotnet-install --help
+
+# See the tool version
+dotnet-install version
+
+# Preview what would be installed
+dotnet-install --dry-run --channel LTS
+
+# Install the latest SDK in a feature band
+dotnet-install --version 10.0.x
+```
+
+If you prefer a standalone executable instead of a .NET tool, jump to [Install The Tool](#install-the-tool).
+
+## Why Developers Use It
+
+- Familiar `dotnet-install` semantics without depending on shell scripts
+- Strong CLI parsing and validation powered by `System.CommandLine`
+- Flexible version selection with channels, exact versions, and wildcard bands
+- Release metadata resolution and candidate URL planning you can inspect with `--dry-run`
+- Proxy, feed, and timeout controls for CI, enterprise networks, and custom feeds
+- NativeAOT-oriented packaging for fast startup and simple distribution
+
+## Common Tasks
+
+Install the latest LTS SDK:
+
+```sh
+dotnet-install --channel LTS
+```
+
+Install the latest SDK in a specific feature band:
+
+```sh
+dotnet-install --version 10.0.x
+```
+
+Install a specific SDK exactly:
+
+```sh
+dotnet-install --version 10.0.201
+```
+
+Install only a runtime:
+
+```sh
+dotnet-install --runtime aspnetcore --version 10.0.x
+```
+
+Preview the plan without downloading:
+
+```sh
+dotnet-install --dry-run --channel STS
+```
+
+Install into a custom location:
+
+```sh
+dotnet-install --version 10.0.x --install-dir ./tools/dotnet
+```
+
+Keep the downloaded archive for inspection or reuse:
+
+```sh
+dotnet-install --version 10.0.x --keep-zip
+```
+
+Preview removal before deleting anything:
+
+```sh
+dotnet-install remove 8.0.204 --dry-run
+```
 
 ## GitHub Action
 
@@ -91,7 +146,7 @@ This repository also ships a first-party composite action at [action.yml](action
 
 When the action is used from a release tag such as `@v1`, it downloads the matching release binary for that action version. If it is used from a branch or local path, it resolves the latest published release asset from `WeihanLi/dotnet-install` and uses that binary with the local action scripts. The resolver prefers the latest stable release and falls back to the latest published prerelease only when no stable release exists yet.
 
-Example usage:
+Example:
 
 ```yaml
 jobs:
@@ -99,8 +154,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: install-dotnet
-        uses: WeihanLi/dotnet-install@0.1.0
+      - uses: WeihanLi/dotnet-install@0.1.0
         with:
           version: 10.0.x
       - run: dotnet --info
@@ -135,91 +189,38 @@ Action outputs:
 - `dotnet-root`
 - `dotnet-path`
 
-## Requirements
+## Status
 
-- .NET 10 SDK or newer
-- A recent `dotnet` CLI with `.slnx` support
+The project is already useful for developer workstations, CI setup, and install-plan inspection:
 
-Verify the environment:
+- Command-line parsing and validation with `System.CommandLine`
+- Channel, quality, exact version, and wildcard version selection
+- Release metadata lookup and candidate URL generation
+- Artifact download, extraction, install verification, and feed/proxy override options
+- Existing-install detection with confirmation prompts
+- PATH updates for the current process, plus optional user PATH persistence on Windows
+- Removal planning and deletion of installed SDK/runtime assets under the selected install root
 
-```sh
-dotnet --list-sdks
-dotnet --list-runtimes
-```
+Parity with the original shell scripts is still in progress, so behavior should continue to align with `dotnet-install.sh` and `dotnet-install.ps1` where possible.
 
-## Getting Started
+Current behavior boundaries:
 
-Build the solution:
-
-```sh
-dotnet build DotNetInstall.slnx
-```
-
-Run the CLI help:
-
-```sh
-dotnet-install --help
-```
-
-Show the tool version:
-
-```sh
-dotnet-install version
-```
-
-Generate an install plan without downloading:
-
-```sh
-dotnet-install --dry-run --channel LTS
-```
-
-Select the latest matching SDK from a version train:
-
-```sh
-dotnet-install --version 10.0.x
-```
-
-Example output:
-
-```text
-dotnet-install plan for channel 10.0 (10.0.5)
-Product: Sdk 10.0.201 | RID: win-x64 | Preview: False
-InstallRoot: C:\Users\<user>\AppData\Local\Microsoft\dotnet
-Primary URL: https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.201/dotnet-sdk-10.0.201-win-x64.zip
-Candidate URLs:
-  [0] https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.201/dotnet-sdk-10.0.201-win-x64.zip
-DryRun: True | KeepZip: False | ZipPath: <temp>
-```
-
-Download an SDK archive:
-
-```sh
-dotnet-install --version 11.0.x
-```
-
-Install and persist the location into the user `PATH` on Windows:
-
-```sh
-dotnet-install --channel LTS --persist-path
-```
-
-Preview the planned removal of an SDK:
-
-```sh
-dotnet-install remove 8.0.204 --dry-run
-```
+- `--dry-run` stops after install plan generation
+- `--quality` can only be combined with `--version Latest`
+- If the requested SDK/runtime version is already installed, the command warns and asks for confirmation unless `--yes` is set
+- In CI, `--yes` defaults to `true`
+- `--persist-path` is supported only on Windows and cannot be combined with `--no-path`
+- If another existing .NET installation is already discoverable from known locations, PATH mutation is skipped to avoid shadowing that install
+- `remove` is destructive and should be previewed with `--dry-run` first when targeting a shared install root
 
 ## Command Surface
 
-The root command mirrors the install flow from the shell scripts. Supported options include:
+The root command mirrors the install flow from the shell scripts. Frequently used options include:
 
 - `--channel`
 - `--quality`
 - `--version`
-- `--internal`
 - `--runtime`
-- `--shared-runtime`
-- `--jsonfile`
 - `--install-dir`
 - `--architecture`
 - `--dry-run`
@@ -244,10 +245,8 @@ Notes:
 
 - `--version` is reserved for the .NET SDK/runtime version to install
 - Use the `version` subcommand to print the tool version
-- `--quality` can only be combined with `--version Latest`
 - Exact versions such as `8.0.205` are supported, and wildcard selectors such as `8.x` and `8.0.x` resolve to the latest matching release
-- `--yes` skips the existing-install confirmation prompt, and defaults to `true` when the `CI` environment variable is set
-- `--persist-path` is supported only on Windows and cannot be combined with `--no-path`
+- `--yes` skips the existing-install confirmation prompt
 
 The `remove` subcommand currently accepts:
 
@@ -271,26 +270,17 @@ For SDK/runtime installs, the command behaves as follows:
 - By default it prepends the resolved install root to the current process `PATH`
 - `--no-path` disables all PATH mutation and prints the install location instead
 - `--persist-path` also prepends the install root to the user `PATH` for future shells on Windows
-- `--persist-path` is rejected on non-Windows platforms and cannot be combined with `--no-path`
 - PATH updates are skipped entirely when an existing .NET installation is already discoverable from the selected install root, `DOTNET_INSTALL_DIR`, `DOTNET_ROOT`, the current `dotnet` command location, or well-known default install roots
-- When PATH updates are skipped, installation still succeeds; the command prints the install location instead of shadowing another .NET installation
 
-## Remove Safety
+## Requirements
 
-The `remove` command is destructive. Use `--dry-run` first when targeting a shared install root.
+.NET 10 SDK or newer for building from source
 
-Current safety rules:
+Verify the environment:
 
-- Removal targets are resolved relative to the install root and rejected if they escape that root
-- `remove` does not modify process PATH, user PATH, shell profiles, or system-wide environment configuration
-- SDK removal starts with `sdk/<sdk-version>` and matching `swidtag` files
-- Unless `--sdk-only` is set, SDK removal can also remove matching runtime folders and companion assets such as `host/fxr`, `shared`, `packs`, `templates`, workload metadata, and sdk-manifest entries
-- When other SDK versions are still installed, shared companion targets are filtered so the command does not remove assets still referenced by those remaining SDK bands
-- Runtime-version input removes only runtime-related folders and companion assets for that runtime version
-- If SDK-to-runtime metadata cannot be resolved, the command warns and removes only SDK-specific paths
-- On Windows, permission failures can trigger a retry with administrator elevation
-- On Linux, permission failures include a `sudo dotnet-install remove <version>` hint
-- If no matching SDK or runtime paths are found under the install root, the command fails instead of silently succeeding
+```sh
+dotnet --list-sdks
+```
 
 ## Build, Test, Pack
 
@@ -319,15 +309,11 @@ dotnet publish src/DotNetInstall/DotNetInstall.csproj -c Release -f net10.0 --us
 - `src/DotNetInstall/Application/` startup and host wiring
 - `src/DotNetInstall/Cli/` commands and options
 - `src/DotNetInstall/Options/` immutable option models
-- `src/DotNetInstall/Services/` metadata resolution, planning, downloading, orchestration
+- `src/DotNetInstall/Services/` metadata resolution, planning, downloading, extraction, and orchestration
 - `tests/DotNetInstall.Tests/` unit tests
 - `dotnet-install.sh` and `dotnet-install.ps1` reference shell-script behavior
 
-## Implementation Notes
+## Additional Docs
 
-- The project targets `net10.0`
-- `System.CommandLine` 2.0.5 powers parsing and validation
-- The main tool project is configured for NativeAOT-oriented publishing
-- Build output is redirected under `artifacts/`
-
-When changing behavior, prefer matching the existing shell scripts instead of inventing new semantics.
+- [docs/github-releases.md](docs/github-releases.md)
+- [docs/releasing.md](docs/releasing.md)
