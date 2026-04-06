@@ -99,7 +99,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: WeihanLi/dotnet-install@v1
+      - uses: WeihanLi/dotnet-install@0.1.0
         id: setup-dotnet
         with:
           version: 10.0.x
@@ -114,7 +114,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: WeihanLi/dotnet-install@v1
+      - uses: WeihanLi/dotnet-install@0.1.0
         id: setup-dotnet
         with:
           version: |
