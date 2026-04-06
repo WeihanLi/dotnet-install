@@ -40,10 +40,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v5
+      - name: install-dotnet
+        uses: ./
         with:
-          dotnet-version: '10.0.x'
+          version: 10.0.x
 
       - name: Resolve release version
         shell: pwsh
