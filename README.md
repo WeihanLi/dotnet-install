@@ -99,8 +99,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: WeihanLi/dotnet-install@0.1.0
-        id: setup-dotnet
+      - name: install-dotnet
+        uses: WeihanLi/dotnet-install@0.1.0
         with:
           version: 10.0.x
       - run: dotnet --info
@@ -119,7 +119,7 @@ jobs:
         with:
           version: |
             10.0.x
-            9.0.x
+            11.0.x
       - run: dotnet --list-sdks
 ```
 
