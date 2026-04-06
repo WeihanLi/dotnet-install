@@ -212,11 +212,11 @@ if ($actualHash -ne $expectedHash) {
     throw "SHA-256 verification failed for '$toolFileName'. Expected '$expectedHash' but got '$actualHash'."
 }
 
-$requestedVersions = Split-RequestedVersions -VersionText $RequestedVersion
-if ($requestedVersions.Count -eq 0) {
+$requestedVersions = @(Split-RequestedVersions -VersionText $RequestedVersion)
+if ($requestedVersions.Length -eq 0) {
     throw 'At least one SDK version must be provided.'
 }
-Write-Diagnostic "Requested version count=$($requestedVersions.Count)"
+Write-Diagnostic "Requested version count=$($requestedVersions.Length)"
 Write-Diagnostic "Requested versions='$($requestedVersions -join ', ')'"
 
 $resolvedVersions = [System.Collections.Generic.List[string]]::new()
