@@ -138,7 +138,7 @@ function Get-LatestPublishedRelease {
 
     try {
         $stableRelease = Get-LatestRelease -Repository $Repository
-        Write-Diagnostic "Resolved latest stable release '${stableRelease.tag_name}'."
+        Write-Diagnostic "Resolved latest stable release '$($stableRelease.tag_name)'."
         return $stableRelease
     }
     catch {
@@ -174,7 +174,7 @@ function Get-LatestPublishedRelease {
 
     $stableRelease = $publishedReleases | Where-Object { -not [bool]$_.prerelease } | Select-Object -First 1
     if ($null -ne $stableRelease) {
-        Write-Diagnostic "Resolved latest stable release '${stableRelease.tag_name}' from release listing fallback."
+        Write-Diagnostic "Resolved latest stable release '$($stableRelease.tag_name)' from release listing fallback."
         return $stableRelease
     }
 
@@ -183,7 +183,7 @@ function Get-LatestPublishedRelease {
         throw "No stable or prerelease releases were found for '$Repository'."
     }
 
-    Write-Diagnostic "Falling back to latest prerelease '${previewRelease.tag_name}'."
+    Write-Diagnostic "Falling back to latest prerelease '$($previewRelease.tag_name)'."
     return $previewRelease
 }
 
