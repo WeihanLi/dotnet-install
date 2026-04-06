@@ -106,15 +106,32 @@ jobs:
       - run: dotnet --info
 ```
 
+To install multiple SDK bands in one action step, pass a newline-delimited `version` value:
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: WeihanLi/dotnet-install@v1
+        id: setup-dotnet
+        with:
+          version: |
+            10.0.x
+            9.0.x
+      - run: dotnet --list-sdks
+```
+
 Action inputs:
 
-- `version` required SDK version selector such as `10.0.201` or `10.0.x`
+- `version` required SDK version selector such as `10.0.201`, `10.0.x`, or a newline-delimited list of selectors
 - `install-dir` optional SDK install location
 - `cache` optional `true` or `false`, defaults to `true`
 
 Action outputs:
 
-- `resolved-version`
+- `resolved-version` single resolved SDK version or a newline-delimited list in request order
 - `install-dir`
 - `dotnet-root`
 - `dotnet-path`

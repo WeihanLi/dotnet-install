@@ -6,7 +6,7 @@ branding:
 
 inputs:
   version:
-    description: .NET SDK version selector to install, for example 10.0.201 or 10.0.x
+    description: .NET SDK version selector(s) to install, for example 10.0.201 or a newline-delimited list such as 10.0.x and 9.0.x
     required: true
   install-dir:
     description: Install directory for the SDK. Defaults to a temp folder under the runner temp directory.
@@ -15,7 +15,7 @@ inputs:
 
 outputs:
   resolved-version:
-    description: Resolved SDK version selected by dotnet-install.
+    description: Resolved SDK version or newline-delimited SDK versions selected by dotnet-install.
     value: ${{ steps.install.outputs.resolved-version }}
   install-dir:
     description: Absolute install directory used for the SDK.

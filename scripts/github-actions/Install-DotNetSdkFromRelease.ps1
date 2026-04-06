@@ -57,6 +57,19 @@ function Write-MultilineActionOutput {
     Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value $marker
 }
 
+function Split-RequestedVersions {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$VersionText
+    )
+
+    return @(
+        $VersionText -split "\r?\n" |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    )
+}
+
 function Add-EnvironmentVariable {
     param(
         [Parameter(Mandatory = $true)]
@@ -124,6 +137,27 @@ function Invoke-Tool {
     return $rendered
 }
 
+function Resolve-RequestedSdkVersion {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Version
+    )
+
+    $dryRunOutput = Invoke-Tool -Arguments @(
+        '--dry-run',
+        '--version', $Version,
+        '--install-dir', $InstallDir,
+        '--no-path'
+    )
+
+    $resolvedVersionMatch = [regex]::Match($dryRunOutput, 'Product:\s*Sdk\s+(?<version>\S+)\s+\|')
+    if (-not $resolvedVersionMatch.Success) {
+        throw "Failed to resolve the SDK version from dotnet-install dry-run output for '$Version'.`n$dryRunOutput"
+    }
+
+    return $resolvedVersionMatch.Groups['version'].Value
+}
+
 $toolDirectory = Split-Path -Path $ToolPath -Parent
 $toolFileName = Split-Path -Path $ToolPath -Leaf
 $shaPath = "$ToolPath.sha256"
@@ -150,26 +184,30 @@ if ($actualHash -ne $expectedHash) {
     throw "SHA-256 verification failed for '$toolFileName'. Expected '$expectedHash' but got '$actualHash'."
 }
 
-$dryRunOutput = Invoke-Tool -Arguments @(
-    '--dry-run',
-    '--version', $RequestedVersion,
-    '--install-dir', $InstallDir,
-    '--no-path'
-)
-
-$resolvedVersionMatch = [regex]::Match($dryRunOutput, 'Product:\s*Sdk\s+(?<version>\S+)\s+\|')
-if (-not $resolvedVersionMatch.Success) {
-    throw "Failed to resolve the SDK version from dotnet-install dry-run output.`n$dryRunOutput"
+$requestedVersions = Split-RequestedVersions -VersionText $RequestedVersion
+if ($requestedVersions.Count -eq 0) {
+    throw 'At least one SDK version must be provided.'
 }
 
-$resolvedVersion = $resolvedVersionMatch.Groups['version'].Value
+$resolvedVersions = [System.Collections.Generic.List[string]]::new()
+$installedResolvedVersions = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
-[void](Invoke-Tool -Arguments @(
-    '--version', $RequestedVersion,
-    '--install-dir', $InstallDir,
-    '--no-path',
-    '--yes'
-))
+foreach ($version in $requestedVersions) {
+    $resolvedVersion = Resolve-RequestedSdkVersion -Version $version
+    $resolvedVersions.Add($resolvedVersion)
+
+    if (-not $installedResolvedVersions.Add($resolvedVersion)) {
+        Write-Host "SDK version '$resolvedVersion' was already requested earlier in this action run. Skipping duplicate install."
+        continue
+    }
+
+    [void](Invoke-Tool -Arguments @(
+        '--version', $version,
+        '--install-dir', $InstallDir,
+        '--no-path',
+        '--yes'
+    ))
+}
 
 $dotnetExecutableName = if ($RunnerOs -eq 'Windows') { 'dotnet.exe' } else { 'dotnet' }
 $dotnetExecutable = Join-Path -Path $InstallDir -ChildPath $dotnetExecutableName
@@ -182,15 +220,17 @@ $env:DOTNET_INSTALL_DIR = $InstallDir
 $env:PATH = "$InstallDir$([System.IO.Path]::PathSeparator)$env:PATH"
 
 $installedSdks = (& $dotnetExecutable --list-sdks 2>&1 | ForEach-Object { "$_" }) -join [Environment]::NewLine
-if ($installedSdks -notmatch "(?m)^$([regex]::Escape($resolvedVersion))\s+\[") {
-    throw "The installed dotnet host does not report SDK version '$resolvedVersion'.`n$installedSdks"
+foreach ($resolvedVersion in $resolvedVersions) {
+    if ($installedSdks -notmatch "(?m)^$([regex]::Escape($resolvedVersion))\s+\[") {
+        throw "The installed dotnet host does not report SDK version '$resolvedVersion'.`n$installedSdks"
+    }
 }
 
 Add-EnvironmentVariable -Name 'DOTNET_ROOT' -Value $InstallDir
 Add-EnvironmentVariable -Name 'DOTNET_INSTALL_DIR' -Value $InstallDir
 Add-PathEntry -PathEntry $InstallDir
 
-Write-ActionOutput -Name 'resolved-version' -Value $resolvedVersion
+Write-MultilineActionOutput -Name 'resolved-version' -Value (($resolvedVersions | Select-Object -Unique) -join [Environment]::NewLine)
 Write-ActionOutput -Name 'install-dir' -Value $InstallDir
 Write-ActionOutput -Name 'dotnet-root' -Value $InstallDir
 Write-ActionOutput -Name 'dotnet-path' -Value $dotnetExecutable
