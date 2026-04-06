@@ -93,6 +93,75 @@ public sealed class GitHubActionScriptsTests
     }
 
     [Fact]
+    public async Task ResolveScript_LocalMode_SkipsStableReleaseWithoutAssets_AndUsesPrereleaseWithAssets()
+    {
+        using var tempDir = new TemporaryDirectory();
+        using var server = new TestHttpServer();
+        var outputPath = tempDir.GetPath("github-output.txt");
+        File.WriteAllText(outputPath, string.Empty);
+
+        server.AddJson(
+            "/repos/WeihanLi/dotnet-install/releases/latest",
+            """
+            {
+              "tag_name": "0.1.0",
+              "draft": false,
+              "prerelease": false,
+              "assets": []
+            }
+            """);
+        server.AddJson(
+            "/repos/WeihanLi/dotnet-install/releases?per_page=20",
+            $$"""
+            [
+              {
+                "tag_name": "0.1.0",
+                "draft": false,
+                "prerelease": false,
+                "assets": []
+              },
+              {
+                "tag_name": "0.1.0-rc-2",
+                "draft": false,
+                "prerelease": true,
+                "assets": [
+                  {
+                    "name": "dotnet-install-0.1.0-rc-2-linux-x64",
+                    "browser_download_url": "{{server.BaseUri}}downloads/dotnet-install-0.1.0-rc-2-linux-x64"
+                  },
+                  {
+                    "name": "dotnet-install-0.1.0-rc-2-linux-x64.sha256",
+                    "browser_download_url": "{{server.BaseUri}}downloads/dotnet-install-0.1.0-rc-2-linux-x64.sha256"
+                  }
+                ]
+              }
+            ]
+            """);
+
+        var result = await ActionScriptTestHost.RunPowerShellFileAsync(
+            ActionScriptTestHost.ResolveScriptPath(@"scripts\github-actions\Resolve-SetupDotNetInstallAction.ps1"),
+            [
+                "-Version", "10.0.x",
+                "-RunnerOs", "Linux",
+                "-RunnerArch", "X64",
+                "-TempDirectory", tempDir.Path
+            ],
+            new Dictionary<string, string?>
+            {
+                ["GITHUB_OUTPUT"] = outputPath,
+                ["DOTNET_INSTALL_ACTION_GITHUB_API_BASE_URL"] = server.BaseUri.ToString().TrimEnd('/'),
+                ["GITHUB_TOKEN"] = string.Empty
+            });
+
+        Assert.Equal(0, result.ExitCode);
+        var outputs = ActionScriptTestHost.ParseGitHubOutputFile(outputPath);
+        Assert.Equal($"{server.BaseUri}downloads/dotnet-install-0.1.0-rc-2-linux-x64", outputs["download-url"]);
+        Assert.Equal($"{server.BaseUri}downloads/dotnet-install-0.1.0-rc-2-linux-x64.sha256", outputs["sha256-url"]);
+        Assert.Contains("Latest stable release '0.1.0' did not contain the required assets for 'linux-x64'.", result.StdOut, StringComparison.Ordinal);
+        Assert.Contains("Falling back to latest prerelease '0.1.0-rc-2'.", result.StdOut, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task InstallScript_MultilineVersions_InstallsUniqueResolvedVersions_AndWritesMultilineOutput()
     {
         using var tempDir = new TemporaryDirectory();

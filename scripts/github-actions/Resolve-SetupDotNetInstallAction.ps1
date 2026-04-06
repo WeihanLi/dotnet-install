@@ -142,20 +142,75 @@ function Get-LatestRelease {
     }
 }
 
+function Get-ReleaseAssetName {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Version,
+
+        [Parameter(Mandatory = $true)]
+        [string]$RuntimeIdentifier
+    )
+
+    if ($RuntimeIdentifier.StartsWith('win-', [System.StringComparison]::OrdinalIgnoreCase)) {
+        return "dotnet-install-$Version-$RuntimeIdentifier.exe"
+    }
+
+    return "dotnet-install-$Version-$RuntimeIdentifier"
+}
+
+function Find-ReleaseWithAssets {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object[]]$Releases,
+
+        [Parameter(Mandatory = $true)]
+        [string]$RuntimeIdentifier,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$Prerelease
+    )
+
+    foreach ($release in $Releases) {
+        if ([bool]$release.prerelease -ne $Prerelease) {
+            continue
+        }
+
+        $normalizedVersion = $release.tag_name.TrimStart('v', 'V')
+        $assetName = Get-ReleaseAssetName -Version $normalizedVersion -RuntimeIdentifier $RuntimeIdentifier
+        $sha256Name = "$assetName.sha256"
+        $assetNames = @($release.assets | ForEach-Object { $_.name })
+
+        if ($assetNames -contains $assetName -and $assetNames -contains $sha256Name) {
+            return $release
+        }
+
+        Write-Diagnostic "Skipping release '$($release.tag_name)' because required assets '$assetName' and '$sha256Name' were not both present."
+    }
+
+    return $null
+}
+
 function Get-LatestPublishedRelease {
-    param([string]$Repository)
+    param(
+        [string]$Repository,
+        [string]$RuntimeIdentifier
+    )
+
+    $headers = New-GitHubApiHeaders
+    $apiBaseUrl = Get-GitHubApiBaseUrl
 
     try {
         $stableRelease = Get-LatestRelease -Repository $Repository
-        Write-Diagnostic "Resolved latest stable release '$($stableRelease.tag_name)'."
-        return $stableRelease
+        if ($null -ne (Find-ReleaseWithAssets -Releases @($stableRelease) -RuntimeIdentifier $RuntimeIdentifier -Prerelease $false)) {
+            Write-Diagnostic "Resolved latest stable release '$($stableRelease.tag_name)'."
+            return $stableRelease
+        }
+
+        Write-Diagnostic "Latest stable release '$($stableRelease.tag_name)' did not contain the required assets for '$RuntimeIdentifier'."
     }
     catch {
         Write-Diagnostic "Latest stable release lookup failed: $($_.Exception.Message)"
     }
-
-    $headers = New-GitHubApiHeaders
-    $apiBaseUrl = Get-GitHubApiBaseUrl
 
     try {
         $response = Invoke-RestMethod -Headers $headers -Uri "$apiBaseUrl/repos/$Repository/releases?per_page=20"
@@ -182,35 +237,19 @@ function Get-LatestPublishedRelease {
         throw "No published releases were found for '$Repository'. Publish a stable or prerelease first."
     }
 
-    $stableRelease = $publishedReleases | Where-Object { -not [bool]$_.prerelease } | Select-Object -First 1
+    $stableRelease = Find-ReleaseWithAssets -Releases $publishedReleases -RuntimeIdentifier $RuntimeIdentifier -Prerelease $false
     if ($null -ne $stableRelease) {
         Write-Diagnostic "Resolved latest stable release '$($stableRelease.tag_name)' from release listing fallback."
         return $stableRelease
     }
 
-    $previewRelease = $publishedReleases | Where-Object { [bool]$_.prerelease } | Select-Object -First 1
+    $previewRelease = Find-ReleaseWithAssets -Releases $publishedReleases -RuntimeIdentifier $RuntimeIdentifier -Prerelease $true
     if ($null -eq $previewRelease) {
-        throw "No stable or prerelease releases were found for '$Repository'."
+        throw "No stable or prerelease releases with matching assets were found for '$Repository' and RID '$RuntimeIdentifier'."
     }
 
     Write-Diagnostic "Falling back to latest prerelease '$($previewRelease.tag_name)'."
     return $previewRelease
-}
-
-function Get-ReleaseAssetName {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Version,
-
-        [Parameter(Mandatory = $true)]
-        [string]$RuntimeIdentifier
-    )
-
-    if ($RuntimeIdentifier.StartsWith('win-', [System.StringComparison]::OrdinalIgnoreCase)) {
-        return "dotnet-install-$Version-$RuntimeIdentifier.exe"
-    }
-
-    return "dotnet-install-$Version-$RuntimeIdentifier"
 }
 
 function Get-ReleaseAssetInfo {
@@ -264,7 +303,7 @@ Write-Diagnostic "IsLocalAction='${isLocalAction}' ResolvedActionRepository='${r
 if ($isLocalAction) {
     # For `uses: ./`, always pair the checked-out action scripts with the latest published binary.
     Write-Diagnostic "Using local action scripts with the latest published release binary."
-    $latestRelease = Get-LatestPublishedRelease -Repository $defaultActionRepository
+    $latestRelease = Get-LatestPublishedRelease -Repository $defaultActionRepository -RuntimeIdentifier $runtimeIdentifier
     $assetInfo = Get-ReleaseAssetInfo -Release $latestRelease -RuntimeIdentifier $runtimeIdentifier
     $tag = $assetInfo.Tag
     $normalizedToolVersion = $assetInfo.NormalizedVersion
@@ -278,7 +317,7 @@ else {
     if (-not (Is-VersionTag -Tag $tag)) {
         # Branch refs and mutable refs do not map to a unique release asset, so use the latest release.
         Write-Diagnostic "Action ref is not a version tag. Falling back to the latest published release binary."
-        $latestRelease = Get-LatestPublishedRelease -Repository $resolvedActionRepository
+        $latestRelease = Get-LatestPublishedRelease -Repository $resolvedActionRepository -RuntimeIdentifier $runtimeIdentifier
         $assetInfo = Get-ReleaseAssetInfo -Release $latestRelease -RuntimeIdentifier $runtimeIdentifier
         $tag = $assetInfo.Tag
         $normalizedToolVersion = $assetInfo.NormalizedVersion
