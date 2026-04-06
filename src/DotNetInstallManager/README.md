@@ -1,22 +1,23 @@
 # dotnet-install
 
-`dotnet-install` is a .NET global tool prototype that aims to mirror the behavior of `dotnet-install.sh` and `dotnet-install.ps1` in managed code.
+`dotnet-install` is a .NET global tool that aims to mirror the behavior of `dotnet-install.sh` and `dotnet-install.ps1` in managed code.
 
 The tool currently does these parts well:
 
 - Binds and validates CLI options with `System.CommandLine`
 - Resolves .NET release metadata
 - Builds an install plan for SDK and runtime requests
-- Downloads the selected SDK or runtime archive
+- Downloads, extracts, and verifies the selected SDK or runtime archive
 - Supports feed, proxy, and timeout overrides
-- Exposes a preview `remove` command surface
+- Updates the current process `PATH`, with optional user PATH persistence on Windows
+- Removes installed SDK/runtime folders and companion assets under the install root
 
 Current limitations:
 
 - `--dry-run` stops after plan generation
-- Non-dry-run install currently downloads the archive but does not extract or install it yet
-- PATH updates are not implemented yet
-- `remove` is a planning stub and does not delete installed bits yet
+- User PATH persistence is supported only on Windows
+- PATH updates are skipped when another existing .NET installation is already discoverable, to avoid shadowing it
+- `remove` is destructive and should be previewed with `--dry-run` first when targeting a shared install root
 
 ## Install
 

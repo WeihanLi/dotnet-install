@@ -4,6 +4,8 @@ This repository publishes native single-file binaries in each GitHub release.
 
 Use a GitHub release when you want a standalone `dotnet-install` executable without first installing the NuGet global tool package.
 
+For stable-action consumers, prefer stable GitHub releases. The repository's GitHub Action uses the latest stable published release binary for branch refs and local-path usage, and falls back to the latest published prerelease only when no stable release exists yet.
+
 ## Choose The Correct Asset
 
 Select the release asset that matches the target machine:

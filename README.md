@@ -89,7 +89,7 @@ See [docs/releasing.md](docs/releasing.md) for the maintainer release checklist.
 
 This repository also ships a first-party composite action at [action.yml](action.yml) for workflows that want to install an SDK through this repo's managed `dotnet-install` release binary instead of `actions/setup-dotnet`.
 
-When the action is used from a release tag such as `@v1`, it downloads the matching release binary for that action version. If it is used from a branch or local path, it resolves the latest published release asset from `WeihanLi/dotnet-install` and uses that binary with the local action scripts, which lets you verify unreleased action-script changes locally against the latest published tool binary.
+When the action is used from a release tag such as `@v1`, it downloads the matching release binary for that action version. If it is used from a branch or local path, it resolves the latest published release asset from `WeihanLi/dotnet-install` and uses that binary with the local action scripts. The resolver prefers the latest stable release and falls back to the latest published prerelease only when no stable release exists yet.
 
 Example usage:
 
@@ -127,7 +127,6 @@ Action inputs:
 
 - `version` required SDK version selector such as `10.0.201`, `10.0.x`, or a newline-delimited list of selectors
 - `install-dir` optional SDK install location
-- `cache` optional `true` or `false`, defaults to `true`
 
 Action outputs:
 

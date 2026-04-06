@@ -18,6 +18,8 @@ Publishing a GitHub release triggers:
 - `.github/workflows/release.yml` to build, test, publish native binaries, and attach release assets
 - `.github/workflows/nuget.yml` to pack and push the NuGet global-tool package
 
+For the first stable release, publish a non-prerelease GitHub release. The GitHub Action in this repository prefers the latest stable release binary for branch refs and local-path usage, and falls back to a prerelease only when no stable release exists yet.
+
 ## GitHub Release Outputs
 
 The release workflow publishes one binary per RID:
@@ -45,8 +47,10 @@ Before publishing a release:
 1. Run `dotnet build DotNetInstallManager.slnx`.
 2. Run `dotnet test DotNetInstallManager.slnx`.
 3. Run `dotnet pack src/DotNetInstallManager/DotNetInstallManager.csproj -c Release`.
-4. Confirm [README.md](../README.md) and [docs/github-releases.md](github-releases.md) still match the actual command surface.
+4. Confirm [README.md](../README.md), [docs/github-releases.md](github-releases.md), and [src/DotNetInstallManager/README.md](../src/DotNetInstallManager/README.md) still match the actual command surface and behavior boundaries.
 5. Confirm the release tag is the intended SemVer for both GitHub assets and the NuGet package.
+6. Confirm the action metadata in [action.yml](../action.yml) matches the documented inputs and outputs.
+7. For a stable release, verify the GitHub release is not marked as a prerelease.
 
 ## Post-Release Checks
 
@@ -54,5 +58,7 @@ After the workflows complete:
 
 1. Verify every RID asset and matching `.sha256` file is attached to the GitHub release.
 2. Verify `spark.dotnet-install` is published on NuGet with the same normalized version.
-3. Install from NuGet with `dotnet tool install --global spark.dotnet-install --version <version>`.
-4. Run a downloaded release binary with `dotnet-install --help`.
+3. Verify the GitHub release is marked stable when publishing a stable version, so the GitHub Action's stable-release lookup can resolve it through the GitHub Releases API.
+4. Install from NuGet with `dotnet tool install --global spark.dotnet-install --version <version>`.
+5. Run a downloaded release binary with `dotnet-install --help`.
+6. Verify the GitHub Action from a release tag, for example `uses: WeihanLi/dotnet-install@0.1.0`, and verify local-path usage `uses: ./` if the action scripts changed.
