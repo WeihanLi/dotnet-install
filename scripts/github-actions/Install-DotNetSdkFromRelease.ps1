@@ -38,6 +38,15 @@ function Write-ActionOutput {
     Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "$Name=$Value"
 }
 
+function Write-Diagnostic {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+
+    Write-Host "[dotnet-install-action] $Message"
+}
+
 function Write-MultilineActionOutput {
     param(
         [Parameter(Mandatory = $true)]
@@ -117,6 +126,7 @@ function Invoke-Download {
     }
 
     try {
+        Write-Diagnostic "Downloading '$Url' to '$DestinationPath'."
         Invoke-WebRequest -Headers $headers -Uri $Url -OutFile $DestinationPath
     }
     catch {
@@ -130,10 +140,15 @@ function Invoke-Tool {
         [string[]]$Arguments
     )
 
+    Write-Diagnostic "Invoking tool: $ToolPath $($Arguments -join ' ')"
     $output = & $ToolPath @Arguments 2>&1
     $rendered = ($output | ForEach-Object { "$_" }) -join [Environment]::NewLine
     if ($LASTEXITCODE -ne 0) {
         throw "dotnet-install failed with exit code $LASTEXITCODE.`n$rendered"
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($rendered)) {
+        Write-Diagnostic "Tool output:`n$rendered"
     }
 
     return $rendered
@@ -165,6 +180,13 @@ $toolDirectory = Split-Path -Path $ToolPath -Parent
 $toolFileName = Split-Path -Path $ToolPath -Leaf
 $shaPath = "$ToolPath.sha256"
 
+Write-Diagnostic "RequestedVersionRaw='${RequestedVersion}'"
+Write-Diagnostic "InstallDir='${InstallDir}'"
+Write-Diagnostic "ToolPath='${ToolPath}'"
+Write-Diagnostic "DownloadUrl='${DownloadUrl}'"
+Write-Diagnostic "Sha256Url='${Sha256Url}'"
+Write-Diagnostic "RunnerOs='${RunnerOs}'"
+
 New-Item -ItemType Directory -Path $toolDirectory -Force | Out-Null
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 
@@ -173,6 +195,7 @@ Invoke-Download -Url $Sha256Url -DestinationPath $shaPath
 
 if ($RunnerOs -ne 'Windows') {
     & chmod +x $ToolPath
+    Write-Diagnostic "Marked tool as executable."
 }
 
 $expectedHashLine = Get-Content -LiteralPath $shaPath -Raw
@@ -183,6 +206,8 @@ if (-not $match.Success) {
 
 $expectedHash = $match.Groups['hash'].Value.ToLowerInvariant()
 $actualHash = (Get-FileHash -LiteralPath $ToolPath -Algorithm SHA256).Hash.ToLowerInvariant()
+Write-Diagnostic "Expected tool SHA256='$expectedHash'"
+Write-Diagnostic "Actual tool SHA256='$actualHash'"
 if ($actualHash -ne $expectedHash) {
     throw "SHA-256 verification failed for '$toolFileName'. Expected '$expectedHash' but got '$actualHash'."
 }
@@ -191,6 +216,8 @@ $requestedVersions = Split-RequestedVersions -VersionText $RequestedVersion
 if ($requestedVersions.Count -eq 0) {
     throw 'At least one SDK version must be provided.'
 }
+Write-Diagnostic "Requested version count=$($requestedVersions.Count)"
+Write-Diagnostic "Requested versions='$($requestedVersions -join ', ')'"
 
 $resolvedVersions = [System.Collections.Generic.List[string]]::new()
 $installedResolvedVersions = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
@@ -198,10 +225,11 @@ $installedResolvedVersions = [System.Collections.Generic.HashSet[string]]::new([
 foreach ($version in $requestedVersions) {
     $resolvedVersion = Resolve-RequestedSdkVersion -Version $version
     $resolvedVersions.Add($resolvedVersion)
+    Write-Diagnostic "Resolved requested version '$version' to SDK '$resolvedVersion'."
 
     # Different selectors can converge on the same concrete SDK; install it only once.
     if (-not $installedResolvedVersions.Add($resolvedVersion)) {
-        Write-Host "SDK version '$resolvedVersion' was already requested earlier in this action run. Skipping duplicate install."
+        Write-Diagnostic "SDK version '$resolvedVersion' was already requested earlier in this action run. Skipping duplicate install."
         continue
     }
 
@@ -215,6 +243,7 @@ foreach ($version in $requestedVersions) {
 
 $dotnetExecutableName = if ($RunnerOs -eq 'Windows') { 'dotnet.exe' } else { 'dotnet' }
 $dotnetExecutable = Join-Path -Path $InstallDir -ChildPath $dotnetExecutableName
+Write-Diagnostic "Expected dotnet executable path='$dotnetExecutable'"
 if (-not (Test-Path -LiteralPath $dotnetExecutable)) {
     throw "The installed dotnet executable was not found at '$dotnetExecutable'."
 }
@@ -222,20 +251,26 @@ if (-not (Test-Path -LiteralPath $dotnetExecutable)) {
 $env:DOTNET_ROOT = $InstallDir
 $env:DOTNET_INSTALL_DIR = $InstallDir
 $env:PATH = "$InstallDir$([System.IO.Path]::PathSeparator)$env:PATH"
+Write-Diagnostic "Exported DOTNET_ROOT and DOTNET_INSTALL_DIR to '$InstallDir'."
 
 $installedSdks = (& $dotnetExecutable --list-sdks 2>&1 | ForEach-Object { "$_" }) -join [Environment]::NewLine
+Write-Diagnostic "dotnet --list-sdks output:`n$installedSdks"
 # Verify every resolved SDK against the installed host, not just the last one.
 foreach ($resolvedVersion in $resolvedVersions) {
     if ($installedSdks -notmatch "(?m)^$([regex]::Escape($resolvedVersion))\s+\[") {
         throw "The installed dotnet host does not report SDK version '$resolvedVersion'.`n$installedSdks"
     }
+
+    Write-Diagnostic "Verified installed SDK '$resolvedVersion'."
 }
 
 Add-EnvironmentVariable -Name 'DOTNET_ROOT' -Value $InstallDir
 Add-EnvironmentVariable -Name 'DOTNET_INSTALL_DIR' -Value $InstallDir
 Add-PathEntry -PathEntry $InstallDir
+Write-Diagnostic "Wrote action environment variables and PATH entry."
 
 Write-MultilineActionOutput -Name 'resolved-version' -Value (($resolvedVersions | Select-Object -Unique) -join [Environment]::NewLine)
 Write-ActionOutput -Name 'install-dir' -Value $InstallDir
 Write-ActionOutput -Name 'dotnet-root' -Value $InstallDir
 Write-ActionOutput -Name 'dotnet-path' -Value $dotnetExecutable
+Write-Diagnostic "Wrote action outputs successfully."
