@@ -51,7 +51,7 @@ jobs:
         run: dotnet --info
 
       - name: Build
-        run: dotnet build DotNetInstallManager.slnx
+        run: dotnet build DotNetInstall.slnx
 
       - name: Test
-        run: dotnet test DotNetInstallManager.slnx --no-build
+        run: dotnet test DotNetInstall.slnx --no-build

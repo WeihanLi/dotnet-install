@@ -44,10 +44,10 @@ The package version is derived from the release tag after stripping an optional 
 
 Before publishing a release:
 
-1. Run `dotnet build DotNetInstallManager.slnx`.
-2. Run `dotnet test DotNetInstallManager.slnx`.
-3. Run `dotnet pack src/DotNetInstallManager/DotNetInstallManager.csproj -c Release`.
-4. Confirm [README.md](../README.md), [docs/github-releases.md](github-releases.md), and [src/DotNetInstallManager/README.md](../src/DotNetInstallManager/README.md) still match the actual command surface and behavior boundaries.
+1. Run `dotnet build DotNetInstall.slnx`.
+2. Run `dotnet test DotNetInstall.slnx`.
+3. Run `dotnet pack src/DotNetInstall/DotNetInstall.csproj -c Release`.
+4. Confirm [README.md](../README.md), [docs/github-releases.md](github-releases.md), and [src/DotNetInstall/README.md](../src/DotNetInstall/README.md) still match the actual command surface and behavior boundaries.
 5. Confirm the release tag is the intended SemVer for both GitHub assets and the NuGet package.
 6. Confirm the action metadata in [action.yml](../action.yml) matches the documented inputs and outputs.
 7. For a stable release, verify the GitHub release is not marked as a prerelease.

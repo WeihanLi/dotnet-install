@@ -152,7 +152,7 @@ dotnet --list-runtimes
 Build the solution:
 
 ```sh
-dotnet build DotNetInstallManager.slnx
+dotnet build DotNetInstall.slnx
 ```
 
 Run the CLI help:
@@ -297,30 +297,30 @@ Current safety rules:
 Build and test the full solution:
 
 ```sh
-dotnet build DotNetInstallManager.slnx
-dotnet test DotNetInstallManager.slnx
+dotnet build DotNetInstall.slnx
+dotnet test DotNetInstall.slnx
 ```
 
 Create the global tool package:
 
 ```sh
-dotnet pack src/DotNetInstallManager/DotNetInstallManager.csproj -c Release
+dotnet pack src/DotNetInstall/DotNetInstall.csproj -c Release
 ```
 
 Publish a self-contained build to `dist`:
 
 ```sh
-dotnet publish src/DotNetInstallManager/DotNetInstallManager.csproj -c Release -f net10.0 --use-current-runtime -o dist
+dotnet publish src/DotNetInstall/DotNetInstall.csproj -c Release -f net10.0 --use-current-runtime -o dist
 ```
 
 ## Repository Layout
 
-- `src/DotNetInstallManager/` application code
-- `src/DotNetInstallManager/Application/` startup and host wiring
-- `src/DotNetInstallManager/Cli/` commands and options
-- `src/DotNetInstallManager/Options/` immutable option models
-- `src/DotNetInstallManager/Services/` metadata resolution, planning, downloading, orchestration
-- `tests/DotNetInstallManager.Tests/` unit tests
+- `src/DotNetInstall/` application code
+- `src/DotNetInstall/Application/` startup and host wiring
+- `src/DotNetInstall/Cli/` commands and options
+- `src/DotNetInstall/Options/` immutable option models
+- `src/DotNetInstall/Services/` metadata resolution, planning, downloading, orchestration
+- `tests/DotNetInstall.Tests/` unit tests
 - `dotnet-install.sh` and `dotnet-install.ps1` reference shell-script behavior
 
 ## Implementation Notes

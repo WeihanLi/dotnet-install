@@ -50,7 +50,7 @@ jobs:
 
       # Build your nuget package here
       - name: Build NuGet package
-        run: dotnet pack ./src/DotNetInstallManager/DotNetInstallManager.csproj -c Release -p:Version=${{ env.NORMALIZED_VERSION }} -o ./artifacts/out/
+        run: dotnet pack ./src/DotNetInstall/DotNetInstall.csproj -c Release -p:Version=${{ env.NORMALIZED_VERSION }} -o ./artifacts/out/
 
       # Get a short-lived NuGet API key
       - name: NuGet login (OIDC → temp API key)

@@ -65,14 +65,14 @@ jobs:
           "NORMALIZED_VERSION=$normalizedVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Build
-        run: dotnet build DotNetInstallManager.slnx -c Release -p:Version=${{ env.NORMALIZED_VERSION }}
+        run: dotnet build DotNetInstall.slnx -c Release -p:Version=${{ env.NORMALIZED_VERSION }}
 
       - name: Test
-        run: dotnet test DotNetInstallManager.slnx -c Release --no-build
+        run: dotnet test DotNetInstall.slnx -c Release --no-build
 
       - name: Publish
         run: >-
-          dotnet publish src/DotNetInstallManager/DotNetInstallManager.csproj
+          dotnet publish src/DotNetInstall/DotNetInstall.csproj
           -c Release
           -p PublishAot=true
           -p:Version=${{ env.NORMALIZED_VERSION }}

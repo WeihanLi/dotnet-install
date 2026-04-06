@@ -29,12 +29,12 @@ When changing behavior, prefer aligning with the existing shell scripts in the r
 
 ## Repository Layout
 
-- `src/DotNetInstallManager/`: application code
-- `src/DotNetInstallManager/Application/`: app startup and host wiring
-- `src/DotNetInstallManager/Cli/`: command and option definitions
-- `src/DotNetInstallManager/Options/`: immutable option models
-- `src/DotNetInstallManager/Services/`: metadata resolution, planning, downloading, orchestration
-- `tests/DotNetInstallManager.Tests/`: unit tests mirroring source areas
+- `src/DotNetInstall/`: application code
+- `src/DotNetInstall/Application/`: app startup and host wiring
+- `src/DotNetInstall/Cli/`: command and option definitions
+- `src/DotNetInstall/Options/`: immutable option models
+- `src/DotNetInstall/Services/`: metadata resolution, planning, downloading, orchestration
+- `tests/DotNetInstall.Tests/`: unit tests mirroring source areas
 - `dotnet-install.sh` and `dotnet-install.ps1`: reference behavior for the original scripts
 - `artifacts/`: build output; do not edit manually
 
@@ -54,18 +54,18 @@ dotnet --list-runtimes
 Use the solution file at the repository root:
 
 ```bash
-dotnet build DotNetInstallManager.slnx
-dotnet test DotNetInstallManager.slnx
+dotnet build DotNetInstall.slnx
+dotnet test DotNetInstall.slnx
 ```
 
 Useful project-level commands:
 
 ```bash
-dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- --help
-dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- remove --help
-dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- version
-dotnet pack src/DotNetInstallManager/DotNetInstallManager.csproj -c Release
-dotnet publish src/DotNetInstallManager/DotNetInstallManager.csproj -c Release -f net10.0 --use-current-runtime -o dist
+dotnet run --project src/DotNetInstall/DotNetInstall.csproj --framework net10.0 -- --help
+dotnet run --project src/DotNetInstall/DotNetInstall.csproj --framework net10.0 -- remove --help
+dotnet run --project src/DotNetInstall/DotNetInstall.csproj --framework net10.0 -- version
+dotnet pack src/DotNetInstall/DotNetInstall.csproj -c Release
+dotnet publish src/DotNetInstall/DotNetInstall.csproj -c Release -f net10.0 --use-current-runtime -o dist
 ```
 
 Notes:
@@ -80,7 +80,7 @@ Notes:
 
 - `InstallCommandBuilder` defines the root install flow, the `remove` subcommand, and the `version` subcommand.
 - The built-in `System.CommandLine` `--version` option is deliberately removed so `--version` can mean `.NET version to install`.
-- If you touch command parsing or option aliases, add or update tests in `tests/DotNetInstallManager.Tests/Cli/`.
+- If you touch command parsing or option aliases, add or update tests in `tests/DotNetInstall.Tests/Cli/`.
 
 ### Host Layer
 
@@ -107,7 +107,7 @@ Document these limitations accurately in code, tests, and docs. Do not claim ins
 Run the full test suite after code changes:
 
 ```bash
-dotnet test DotNetInstallManager.slnx
+dotnet test DotNetInstall.slnx
 ```
 
 Add focused tests when you change:
@@ -119,15 +119,15 @@ Add focused tests when you change:
 
 Recommended manual checks, depending on the change:
 
-1. `dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- --help`
-2. `dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- remove --help`
-3. `dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- version`
-4. `dotnet run --project src/DotNetInstallManager/DotNetInstallManager.csproj --framework net10.0 -- --dry-run --channel LTS`
+1. `dotnet run --project src/DotNetInstall/DotNetInstall.csproj --framework net10.0 -- --help`
+2. `dotnet run --project src/DotNetInstall/DotNetInstall.csproj --framework net10.0 -- remove --help`
+3. `dotnet run --project src/DotNetInstall/DotNetInstall.csproj --framework net10.0 -- version`
+4. `dotnet run --project src/DotNetInstall/DotNetInstall.csproj --framework net10.0 -- --dry-run --channel LTS`
 
 If you change packaging or publish behavior, also run:
 
 ```bash
-dotnet pack src/DotNetInstallManager/DotNetInstallManager.csproj -c Release
+dotnet pack src/DotNetInstall/DotNetInstall.csproj -c Release
 ```
 
 ## Coding Conventions
@@ -146,7 +146,7 @@ Do not assume generated outputs under `artifacts/` should be committed or edited
 
 ## Change Guidance For Agents
 
-- Prefer fixing behavior in `src/DotNetInstallManager/` and proving it with tests under `tests/DotNetInstallManager.Tests/`.
+- Prefer fixing behavior in `src/DotNetInstall/` and proving it with tests under `tests/DotNetInstall.Tests/`.
 - Use the shell scripts as a behavior reference when implementing install semantics.
 - Keep public CLI names and aliases stable unless the task explicitly changes the command surface.
 - When adding new options, validate interactions in `InstallCommandBuilder` and cover them with parser tests.
@@ -197,4 +197,4 @@ chore: bump WeihanLi.Common to 1.0.87
 - The default branch is `main`.
 - Prefer small, reviewable commits.
 - Conventional Commits are a good fit for this repository, for example `fix(cli): validate version and quality combination`.
-- Before opening or updating a PR, ensure `dotnet build DotNetInstallManager.slnx` and `dotnet test DotNetInstallManager.slnx` pass.
+- Before opening or updating a PR, ensure `dotnet build DotNetInstall.slnx` and `dotnet test DotNetInstall.slnx` pass.
