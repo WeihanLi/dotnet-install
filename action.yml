@@ -1,8 +1,8 @@
-name: setup-dotnet-install
+name: install-dotnet
 description: Install a .NET SDK by downloading this repository's dotnet-install release binary and using it to provision a local SDK.
 branding:
   icon: 'chevron-right'
-  color: 'black'
+  color: 'blue'
 
 inputs:
   version:
