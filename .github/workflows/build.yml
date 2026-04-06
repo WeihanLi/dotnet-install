@@ -35,17 +35,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: install-dotnet
-        uses: ./
-        with:
-          version: |
-            10.0.x
-            11.0.x
-
       # - name: install-dotnet
-      #   uses: WeihanLi/dotnet-install@0.1.0
+      #   uses: ./
       #   with:
-      #     version: 10.0.x
+      #     version: |
+      #       10.0.x
+      #       11.0.x
+
+      - name: install-dotnet
+        uses: WeihanLi/dotnet-install@0.1.0
+        with:
+          version: 10.0.x
 
       - name: Display .NET info
         run: dotnet --info
