@@ -24,10 +24,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: install-dotnet
-        uses: ./
+      - name: setup-dotnet
+        uses: actions/setup-dotnet@v5
         with:
-          version: 10.0.x
+          dotnet-version: 10.0.x
 
       - name: Resolve package version
         shell: pwsh
