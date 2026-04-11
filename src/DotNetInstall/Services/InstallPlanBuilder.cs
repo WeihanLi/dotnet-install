@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Linq;
 using System.Runtime.InteropServices;
 using DotNetInstall.Options;
 
@@ -27,12 +26,11 @@ internal sealed record InstallPlan(
 
 internal static class InstallPlanBuilder
 {
-    private const string AutoToken = "<auto>";
     private static readonly string[] KnownFeedRoots =
-    {
+    [
         "https://builds.dotnet.microsoft.com/dotnet",
         "https://dotnetcli.blob.core.windows.net/dotnet"
-    };
+    ];
 
     public static async Task<InstallPlan> BuildAsync(
         InstallOptions options,
@@ -361,92 +359,17 @@ internal static class InstallPlanBuilder
             return ".tar.bz2";
         }
 
-        return Path.GetExtension(fileName) ?? string.Empty;
+        return Path.GetExtension(fileName);
     }
 
     private static string ResolveRuntimeIdentifier(InstallOptions options)
     {
         if (!string.IsNullOrWhiteSpace(options.RuntimeId))
         {
-            return options.RuntimeId;
+            return options.RuntimeId.Trim().ToLowerInvariant();
         }
 
-        var architecture = ResolveArchitecture(options.Architecture);
-        var os = ResolveOperatingSystem(options.UserProvidedOs);
-
-        return $"{os}-{architecture}";
-    }
-
-    private static string ResolveArchitecture(string? architecture)
-    {
-        if (string.IsNullOrWhiteSpace(architecture) || architecture.Equals(AutoToken, StringComparison.OrdinalIgnoreCase))
-        {
-            return RuntimeInformation.ProcessArchitecture switch
-            {
-                Architecture.X64 => "x64",
-                Architecture.Arm64 => "arm64",
-                Architecture.Arm => "arm",
-                Architecture.X86 => "x86",
-                Architecture.S390x => "s390x",
-                Architecture.Wasm => "wasm",
-                Architecture.Ppc64le => "ppc64le",
-                _ => throw new InstallException($"Unsupported architecture '{RuntimeInformation.ProcessArchitecture}'.")
-            };
-        }
-
-        return architecture.ToLowerInvariant() switch
-        {
-            "amd64" => "x64",
-            "x64" => "x64",
-            "x86" => "x86",
-            "arm64" => "arm64",
-            "arm" => "arm",
-            "armhf" => "arm",
-            "ppc64le" => "ppc64le",
-            "s390x" => "s390x",
-            "wasm" => "wasm",
-            _ => throw new InstallException($"Architecture '{architecture}' is not supported.")
-        };
-    }
-
-    private static string ResolveOperatingSystem(string? userProvidedOs)
-    {
-        if (!string.IsNullOrWhiteSpace(userProvidedOs) && !userProvidedOs.Equals(AutoToken, StringComparison.OrdinalIgnoreCase))
-        {
-            return NormalizeOs(userProvidedOs);
-        }
-
-        if (OperatingSystem.IsWindows())
-        {
-            return "win";
-        }
-
-        if (OperatingSystem.IsMacOS())
-        {
-            return RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "osx" : "osx";
-        }
-
-        if (OperatingSystem.IsLinux())
-        {
-            return "linux";
-        }
-
-        throw new InstallException("Unable to determine the host operating system. Use --os to specify it explicitly.");
-    }
-
-    private static string NormalizeOs(string value)
-    {
-        return value.ToLowerInvariant() switch
-        {
-            "win" or "windows" => "win",
-            "osx" or "macos" => "osx",
-            "linux" => "linux",
-            "linux-musl" or "alpine" => "linux-musl",
-            "linux-musleabihf" => "linux-musl",
-            "rhel6" or "rhel.6" => "rhel.6",
-            "freebsd" => "freebsd",
-            _ => value.ToLowerInvariant()
-        };
+        return RuntimeInformation.RuntimeIdentifier;
     }
 
     private static IReadOnlyList<string> BuildCandidateUrls(string primaryUrl, InstallOptions options)

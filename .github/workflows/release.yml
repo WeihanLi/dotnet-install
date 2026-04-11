@@ -24,14 +24,28 @@ jobs:
         include:
           - os: ubuntu-latest
             rid: linux-x64
+            native_prerequisites: ''
           - os: ubuntu-24.04-arm
             rid: linux-arm64
+            native_prerequisites: ''
+          - os: ubuntu-latest
+            rid: linux-musl-x64
+            native_prerequisites: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev musl-tools
+          - os: ubuntu-24.04-arm
+            rid: linux-musl-arm64
+            native_prerequisites: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev musl-tools
           - os: windows-latest
             rid: win-x64
+            native_prerequisites: ''
           - os: windows-11-arm
             rid: win-arm64
+            native_prerequisites: ''
+          - os: macos-latest
+            rid: osx-x64
+            native_prerequisites: ''
           - os: macos-latest
             rid: osx-arm64
+            native_prerequisites: ''
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DOTNET_NOLOGO: '1'
@@ -69,6 +83,10 @@ jobs:
 
       - name: Test
         run: dotnet test DotNetInstall.slnx -c Release --no-build
+
+      - name: Install native AOT prerequisites
+        if: matrix.native_prerequisites != ''
+        run: ${{ matrix.native_prerequisites }}
 
       - name: Publish
         run: >-

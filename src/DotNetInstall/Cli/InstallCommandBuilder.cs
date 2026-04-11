@@ -41,7 +41,7 @@ internal static class InstallCommandBuilder
         var zipPathOption = CreateFileOption("--zip-path", "Custom path for the downloaded archive", "-ZipPath");
         var verboseOption = CreateBoolOption("--verbose", "Emit verbose diagnostics", "-Verbose");
         var runtimeIdOption = CreateNullableStringOption("--runtime-id", "Legacy runtime identifier override", "-RuntimeId");
-        var osOption = CreateNullableStringOption("--os", "Override OS detection (linux, linux-musl, osx, freebsd, rhel.6)", "-OS");
+        var osOption = CreateNullableStringOption("--os", "Override OS detection (linux, alpine/linux-musl, osx, freebsd, rhel.6)", "-OS");
         var downloadTimeoutOption = CreateIntOption("--download-timeout", "HTTP download timeout in seconds", 1200, "-DownloadTimeout");
 
         var root = new RootCommand("NativeAOT-powered dotnet-install manager that mirrors the shell scripts");

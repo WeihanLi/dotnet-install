@@ -424,4 +424,48 @@ public sealed class InstallPlanBuilderTests
         Assert.True(plan.CandidateUrls.Count > 1, "Expected more than one candidate URL when Azure feed is specified");
         Assert.Contains(plan.CandidateUrls, u => u.StartsWith("https://custom.azure.feed/"));
     }
+
+    [Fact]
+    public async Task BuildAsync_NormalizesMacRuntimeIdAlias_ToCanonicalOsxRid()
+    {
+        var releaseDocument = FakeReleaseMetadataClient.CreateSdkReleaseDocument(
+            channelVersion: "8.0",
+            releaseVersion: "8.0.5",
+            sdkVersion: "8.0.205",
+            runtimeVersion: "8.0.5",
+            rid: "osx-x64");
+
+        var client = FakeReleaseMetadataClient.CreateSimple("8.0", "lts", releaseDocument);
+        var options = DefaultOptions(channel: "lts") with
+        {
+            RuntimeId = "osx-x64"
+        };
+
+        var plan = await InstallPlanBuilder.BuildAsync(options, client, CancellationToken.None);
+
+        Assert.Equal("osx-x64", plan.TargetRid);
+        Assert.Equal("dotnet-sdk-8.0.205-osx-x64.zip", plan.AssetName);
+    }
+
+    [Fact]
+    public async Task BuildAsync_NormalizesAlpineRuntimeIdAlias_ToCanonicalLinuxMuslRid()
+    {
+        var releaseDocument = FakeReleaseMetadataClient.CreateSdkReleaseDocument(
+            channelVersion: "8.0",
+            releaseVersion: "8.0.5",
+            sdkVersion: "8.0.205",
+            runtimeVersion: "8.0.5",
+            rid: "linux-musl-x64");
+
+        var client = FakeReleaseMetadataClient.CreateSimple("8.0", "lts", releaseDocument);
+        var options = DefaultOptions(channel: "lts") with
+        {
+            RuntimeId = "linux-musl-x64"
+        };
+
+        var plan = await InstallPlanBuilder.BuildAsync(options, client, CancellationToken.None);
+
+        Assert.Equal("linux-musl-x64", plan.TargetRid);
+        Assert.Equal("dotnet-sdk-8.0.205-linux-musl-x64.zip", plan.AssetName);
+    }
 }

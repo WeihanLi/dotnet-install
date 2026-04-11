@@ -141,10 +141,7 @@ internal sealed class SelfUpdater : ISelfUpdater
         }
     }
 
-    internal static string ResolveRuntimeIdentifier()
-    {
-        return RuntimeInformation.RuntimeIdentifier;
-    }
+    private static string ResolveRuntimeIdentifier() => RuntimeInformation.RuntimeIdentifier;
 
     internal static string GetReleaseAssetName(string version, string runtimeIdentifier) =>
         runtimeIdentifier.StartsWith("win-", StringComparison.OrdinalIgnoreCase)

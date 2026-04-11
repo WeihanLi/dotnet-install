@@ -168,6 +168,112 @@ public sealed class GitHubActionScriptsTests
     }
 
     [Fact]
+    public async Task ResolveScript_LocalMode_UsesMacOsX64ReleaseAsset()
+    {
+        using var tempDir = new TemporaryDirectory();
+        using var server = new TestHttpServer();
+        var outputPath = tempDir.GetPath("github-output.txt");
+        File.WriteAllText(outputPath, string.Empty);
+
+        server.AddJson(
+            "/repos/WeihanLi/dotnet-install/releases/latest",
+            $$"""
+            {
+              "tag_name": "0.2.0",
+              "draft": false,
+              "prerelease": false,
+              "assets": [
+                {
+                  "name": "dotnet-install-0.2.0-osx-x64",
+                  "browser_download_url": "{{server.BaseUri}}downloads/dotnet-install-0.2.0-osx-x64"
+                },
+                {
+                  "name": "dotnet-install-0.2.0-osx-x64.sha256",
+                  "browser_download_url": "{{server.BaseUri}}downloads/dotnet-install-0.2.0-osx-x64.sha256"
+                }
+              ]
+            }
+            """);
+
+        var result = await ActionScriptTestHost.RunPowerShellFileAsync(
+            ActionScriptTestHost.ResolveScriptPath(@"scripts\github-actions\Resolve-SetupDotNetInstallAction.ps1"),
+            [
+                "-Version", "10.0.x",
+                "-RunnerOs", "macOS",
+                "-RunnerArch", "X64",
+                "-TempDirectory", tempDir.Path
+            ],
+            new Dictionary<string, string?>
+            {
+                ["GITHUB_OUTPUT"] = outputPath,
+                ["DOTNET_INSTALL_ACTION_GITHUB_API_BASE_URL"] = server.BaseUri.ToString().TrimEnd('/'),
+                ["GITHUB_TOKEN"] = string.Empty
+            });
+
+        Assert.True(
+            result.ExitCode == 0,
+            $"ExitCode={result.ExitCode}{Environment.NewLine}STDOUT:{Environment.NewLine}{result.StdOut}{Environment.NewLine}STDERR:{Environment.NewLine}{result.StdErr}");
+        var outputs = ActionScriptTestHost.ParseGitHubOutputFile(outputPath);
+        Assert.Equal($"{server.BaseUri}downloads/dotnet-install-0.2.0-osx-x64", outputs["download-url"]);
+        Assert.Equal($"{server.BaseUri}downloads/dotnet-install-0.2.0-osx-x64.sha256", outputs["sha256-url"]);
+    }
+
+    [Fact]
+    public async Task ResolveScript_LocalMode_UsesLinuxMuslAsset_OnAlpineHost()
+    {
+        using var tempDir = new TemporaryDirectory();
+        using var server = new TestHttpServer();
+        var outputPath = tempDir.GetPath("github-output.txt");
+        var osReleasePath = tempDir.GetPath("os-release");
+        File.WriteAllText(outputPath, string.Empty);
+        File.WriteAllText(osReleasePath, "ID=alpine");
+
+        server.AddJson(
+            "/repos/WeihanLi/dotnet-install/releases/latest",
+            $$"""
+            {
+              "tag_name": "0.2.0",
+              "draft": false,
+              "prerelease": false,
+              "assets": [
+                {
+                  "name": "dotnet-install-0.2.0-linux-musl-x64",
+                  "browser_download_url": "{{server.BaseUri}}downloads/dotnet-install-0.2.0-linux-musl-x64"
+                },
+                {
+                  "name": "dotnet-install-0.2.0-linux-musl-x64.sha256",
+                  "browser_download_url": "{{server.BaseUri}}downloads/dotnet-install-0.2.0-linux-musl-x64.sha256"
+                }
+              ]
+            }
+            """);
+
+        var result = await ActionScriptTestHost.RunPowerShellFileAsync(
+            ActionScriptTestHost.ResolveScriptPath(@"scripts\github-actions\Resolve-SetupDotNetInstallAction.ps1"),
+            [
+                "-Version", "10.0.x",
+                "-RunnerOs", "Linux",
+                "-RunnerArch", "X64",
+                "-TempDirectory", tempDir.Path
+            ],
+            new Dictionary<string, string?>
+            {
+                ["GITHUB_OUTPUT"] = outputPath,
+                ["DOTNET_INSTALL_ACTION_GITHUB_API_BASE_URL"] = server.BaseUri.ToString().TrimEnd('/'),
+                ["DOTNET_INSTALL_ACTION_OS_RELEASE_PATH"] = osReleasePath,
+                ["GITHUB_TOKEN"] = string.Empty
+            });
+
+        Assert.True(
+            result.ExitCode == 0,
+            $"ExitCode={result.ExitCode}{Environment.NewLine}STDOUT:{Environment.NewLine}{result.StdOut}{Environment.NewLine}STDERR:{Environment.NewLine}{result.StdErr}");
+        var outputs = ActionScriptTestHost.ParseGitHubOutputFile(outputPath);
+        Assert.Equal($"{server.BaseUri}downloads/dotnet-install-0.2.0-linux-musl-x64", outputs["download-url"]);
+        Assert.Equal($"{server.BaseUri}downloads/dotnet-install-0.2.0-linux-musl-x64.sha256", outputs["sha256-url"]);
+        Assert.Contains("RuntimeIdentifier='linux-musl-x64'", result.StdOut, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task InstallScript_MultilineVersions_InstallsUniqueResolvedVersions_AndWritesMultilineOutput()
     {
         using var tempDir = new TemporaryDirectory();

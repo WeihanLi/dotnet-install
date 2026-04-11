@@ -53,6 +53,34 @@ function Write-Diagnostic {
     Write-Host "[dotnet-install-action] $Message"
 }
 
+function Test-IsMuslBasedLinux {
+    $osReleasePath = if (-not [string]::IsNullOrWhiteSpace($env:DOTNET_INSTALL_ACTION_OS_RELEASE_PATH)) {
+        $env:DOTNET_INSTALL_ACTION_OS_RELEASE_PATH
+    }
+    else {
+        '/etc/os-release'
+    }
+
+    if (Test-Path -LiteralPath $osReleasePath) {
+        $osReleaseContent = Get-Content -LiteralPath $osReleasePath -Raw
+        if ($osReleaseContent -match '(?m)^ID="?alpine"?$') {
+            return $true
+        }
+    }
+
+    try {
+        $lddOutput = (& ldd --version 2>&1 | Out-String)
+        if ($lddOutput -match 'musl') {
+            return $true
+        }
+    }
+    catch {
+        Write-Diagnostic "Unable to execute 'ldd --version' while checking for musl: $($_.Exception.Message)"
+    }
+
+    return $false
+}
+
 function Resolve-RuntimeIdentifier {
     # Match the release artifact RID names produced by the publish workflow.
     switch ($RunnerOs) {
@@ -63,13 +91,15 @@ function Resolve-RuntimeIdentifier {
             }
         }
         'Linux' {
+            $isMusl = Test-IsMuslBasedLinux
             switch ($RunnerArch) {
-                'X64' { return 'linux-x64' }
-                'ARM64' { return 'linux-arm64' }
+                'X64' { return $(if ($isMusl) { 'linux-musl-x64' } else { 'linux-x64' }) }
+                'ARM64' { return $(if ($isMusl) { 'linux-musl-arm64' } else { 'linux-arm64' }) }
             }
         }
         'macOS' {
             switch ($RunnerArch) {
+                'X64' { return 'osx-x64' }
                 'ARM64' { return 'osx-arm64' }
             }
         }
