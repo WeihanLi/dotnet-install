@@ -77,6 +77,9 @@ dotnet-install --dry-run --channel LTS
 
 # Install the latest SDK in a feature band
 dotnet-install --version 10.0.x
+
+# Update an installed SDK band and remove obsolete versions in that channel
+dotnet-install update 10.0.x --dry-run
 ```
 
 If you prefer a standalone executable instead of a .NET tool, jump to [Install The Tool](#install-the-tool).
@@ -138,6 +141,18 @@ Preview removal before deleting anything:
 
 ```sh
 dotnet-install remove 8.0.204 --dry-run
+```
+
+Preview an SDK update before installing/removing anything:
+
+```sh
+dotnet-install update 10.0.x --dry-run
+```
+
+Update only the .NET runtime in a channel:
+
+```sh
+dotnet-install update 10.0.x --runtime
 ```
 
 ## GitHub Action
@@ -212,6 +227,7 @@ Current behavior boundaries:
 - `--persist-path` is supported only on Windows and cannot be combined with `--no-path`
 - If another existing .NET installation is already discoverable from known locations, PATH mutation is skipped to avoid shadowing that install
 - `remove` is destructive and should be previewed with `--dry-run` first when targeting a shared install root
+- `update` resolves the requested SDK/runtime version, skips installation when that resolved version is already present, and removes other installed versions in the same major.minor channel
 
 ## Command Surface
 
@@ -255,6 +271,13 @@ The `remove` subcommand currently accepts:
 - `--sdk-only`
 - `--dry-run`
 - `--verbose`
+
+The `update` subcommand currently accepts:
+
+- A required `<version>` argument such as `10.0.201` or `10.0.x`
+- `--runtime` to update only the .NET runtime
+- `--install-dir`
+- `--dry-run`
 
 ## PATH Behavior
 

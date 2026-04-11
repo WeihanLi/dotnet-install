@@ -203,6 +203,35 @@ public sealed class InstallOrchestratorTests : IDisposable
         Assert.Equal(string.Empty, error.ToString());
     }
 
+    [Fact]
+    public void BuildUpdateInstallStatusMessage_ReturnsAlreadyInstalledMessage_WhenInstallNotRequired()
+    {
+        var plan = new UpdatePlan(
+            RequestedVersion: "10.0.x",
+            ResolvedVersion: "10.0.201",
+            ProductKind: InstallProductKind.Sdk,
+            ChannelVersion: "10.0",
+            InstallRoot: _root,
+            InstallRequired: false,
+            InstalledVersions: ["10.0.201"],
+            ObsoleteVersions: [],
+            InstallPlan: new InstallPlan(
+                ChannelVersion: "10.0",
+                ReleaseVersion: "10.0.5",
+                ProductVersion: "10.0.201",
+                ProductKind: InstallProductKind.Sdk,
+                TargetRid: "win-x64",
+                AssetName: "dotnet-sdk-10.0.201-win-x64.zip",
+                SourceUrl: "https://example.test/sdk.zip",
+                CandidateUrls: ["https://example.test/sdk.zip"],
+                ExpectedHash: null,
+                IsPreview: false));
+
+        var message = InstallOrchestrator.BuildUpdateInstallStatusMessage(plan);
+
+        Assert.Equal("Latest requested .NET SDK version '10.0.201' is already installed.", message);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_root))

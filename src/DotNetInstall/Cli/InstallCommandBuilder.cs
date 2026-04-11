@@ -77,6 +77,7 @@ internal static class InstallCommandBuilder
         root.Add(runtimeIdOption);
         root.Add(osOption);
         root.Add(downloadTimeoutOption);
+        root.Add(CreateUpdateCommand());
         root.Add(CreateRemoveCommand());
         root.Add(CreateVersionCommand());
 
@@ -134,6 +135,53 @@ internal static class InstallCommandBuilder
             parseResult.GetValue(runtimeIdOption),
             parseResult.GetValue(osOption),
             parseResult.GetValue(downloadTimeoutOption));
+
+        Command CreateUpdateCommand()
+        {
+            var updateCommand = new Command("update", "Install the requested SDK/runtime version and remove obsolete versions in the same channel");
+
+            var versionArgument = new Argument<string>("version")
+            {
+                Description = "SDK or runtime version to update to",
+                Arity = ArgumentArity.ExactlyOne
+            };
+
+            var updateRuntimeOption = CreateBoolOption("--runtime", "Update only the .NET runtime");
+            var updateDryRunOption = CreateBoolOption("--dry-run", "Emit the update plan without installing or removing anything", "-DryRun");
+            var updateInstallDirOption = CreateStringOption("--install-dir", "Installation root", "<auto>", "--dir", "--folder");
+
+            updateCommand.Add(versionArgument);
+            updateCommand.Add(updateRuntimeOption);
+            updateCommand.Add(updateDryRunOption);
+            updateCommand.Add(updateInstallDirOption);
+
+            updateCommand.Validators.Add(result =>
+            {
+                var versionValue = result.GetValue(versionArgument);
+                if (string.IsNullOrWhiteSpace(versionValue))
+                {
+                    result.AddError("A version argument is required when updating an SDK/runtime.");
+                }
+            });
+
+            updateCommand.SetAction(async (parseResult, invocationToken) =>
+            {
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(invocationToken, externalToken);
+                var updateOptions = BindUpdateOptions(parseResult);
+                var output = parseResult.InvocationConfiguration.Output ?? Console.Out;
+                var error = parseResult.InvocationConfiguration.Error ?? Console.Error;
+                var exitCode = await orchestrator.ExecuteUpdateAsync(updateOptions, output, error, linkedCts.Token);
+                return exitCode;
+            });
+
+            return updateCommand;
+
+            UpdateOptions BindUpdateOptions(ParseResult parseResult) => new(
+                parseResult.GetValue(versionArgument)!,
+                parseResult.GetValue(updateRuntimeOption),
+                parseResult.GetValue(updateDryRunOption),
+                parseResult.GetValue(updateInstallDirOption)!);
+        }
 
         Command CreateRemoveCommand()
         {

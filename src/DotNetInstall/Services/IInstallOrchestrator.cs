@@ -10,6 +10,12 @@ internal interface IInstallOrchestrator
         TextWriter standardError,
         CancellationToken cancellationToken);
 
+    Task<int> ExecuteUpdateAsync(
+        UpdateOptions options,
+        TextWriter standardOut,
+        TextWriter standardError,
+        CancellationToken cancellationToken);
+
     Task<int> ExecuteRemovalAsync(
         RemoveOptions options,
         TextWriter standardOut,

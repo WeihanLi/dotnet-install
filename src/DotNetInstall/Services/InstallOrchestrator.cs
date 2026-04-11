@@ -59,32 +59,94 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
                 return 1;
             }
 
-            var downloader = new ArtifactDownloader(httpClient, standardOut, standardError, options.Verbose);
-            var downloadResult = await downloader.DownloadAsync(plan, options, cancellationToken);
-            if (!downloadResult.Success)
+            return await ExecuteInstallPlanAsync(plan, options, installRoot, shouldUpdatePath, httpClient, standardOut, standardError, cancellationToken);
+        }
+        catch (InstallException ex)
+        {
+            standardError.WriteLine(ex.Message);
+            return 1;
+        }
+        catch (OperationCanceledException)
+        {
+            standardError.WriteLine("Operation cancelled.");
+            return 1;
+        }
+    }
+
+    public async Task<int> ExecuteUpdateAsync(
+        UpdateOptions options,
+        TextWriter standardOut,
+        TextWriter standardError,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var installOptions = UpdatePlanner.CreateInstallOptions(options);
+            using var httpClient = CreateHttpClient(installOptions);
+            var metadataClient = new ReleaseMetadataClient(httpClient);
+            var updatePlan = await UpdatePlanner.BuildAsync(options, metadataClient, cancellationToken);
+
+            WriteUpdatePlan(updatePlan, options, standardOut);
+
+            if (options.DryRun)
             {
-                standardError.WriteLine("Failed to download the requested artifact from any candidate URL.");
-                return 1;
+                return 0;
             }
 
-            standardOut.WriteLine($"Extracting archive to {installRoot}");
-            var extractor = new ArchiveExtractor(standardOut, options.Verbose);
-
-            try
+            if (updatePlan.InstallRequired)
             {
-                extractor.Extract(downloadResult.DownloadPath!, installRoot, options.OverrideNonVersionedFiles, cancellationToken);
-                InstallVerifier.VerifyInstalled(plan, installRoot);
-            }
-            finally
-            {
-                if (!options.KeepZip)
+                var shouldUpdatePath = InstallEnvironment.ShouldUpdatePathForInstall(updatePlan.InstallRoot);
+                var installExitCode = await ExecuteInstallPlanAsync(
+                    updatePlan.InstallPlan,
+                    installOptions,
+                    updatePlan.InstallRoot,
+                    shouldUpdatePath,
+                    httpClient,
+                    standardOut,
+                    standardError,
+                    cancellationToken);
+                if (installExitCode != 0)
                 {
-                    TryDeleteArchive(downloadResult.DownloadPath, standardOut, standardError, options.Verbose);
+                    return installExitCode;
                 }
             }
+            else
+            {
+                standardOut.WriteLine($"Skipping installation because {InstallVerifier.GetAssetDisplayName(updatePlan.ProductKind)} version '{updatePlan.ResolvedVersion}' is already installed.");
+            }
 
-            InstallEnvironment.ConfigurePath(installRoot, options.NoPath, options.PersistPath, options.Verbose, shouldUpdatePath, standardOut);
-            standardOut.WriteLine($"Installation finished successfully: {plan.ProductKind} {plan.ProductVersion}");
+            if (updatePlan.ObsoleteVersions.Count == 0)
+            {
+                standardOut.WriteLine("No obsolete versions were found to remove.");
+                standardOut.WriteLine($"Update finished successfully: {updatePlan.ProductKind} {updatePlan.ResolvedVersion}");
+                return 0;
+            }
+
+            var resolver = new RemovalVersionResolver();
+            var remover = _removerFactory(standardOut, false);
+
+            foreach (var obsoleteVersion in updatePlan.ObsoleteVersions)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                standardOut.WriteLine($"Removing obsolete {InstallVerifier.GetAssetDisplayName(updatePlan.ProductKind)} version '{obsoleteVersion}'.");
+                var removalPlan = await resolver.ResolveAsync(
+                    obsoleteVersion,
+                    sdkOnly: false,
+                    updatePlan.InstallRoot,
+                    metadataClient,
+                    cancellationToken);
+                removalPlan = await FilterSharedTargetsAsync(
+                    removalPlan,
+                    updatePlan.InstallRoot,
+                    resolver,
+                    metadataClient,
+                    cancellationToken);
+
+                remover.Remove(removalPlan, updatePlan.InstallRoot, dryRun: false, cancellationToken);
+            }
+
+            standardOut.WriteLine($"Update finished successfully: {updatePlan.ProductKind} {updatePlan.ResolvedVersion}");
             return 0;
         }
         catch (InstallException ex)
@@ -202,6 +264,45 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
         return proxy;
     }
 
+    private static async Task<int> ExecuteInstallPlanAsync(
+        InstallPlan plan,
+        InstallOptions options,
+        string installRoot,
+        bool shouldUpdatePath,
+        HttpClient httpClient,
+        TextWriter standardOut,
+        TextWriter standardError,
+        CancellationToken cancellationToken)
+    {
+        var downloader = new ArtifactDownloader(httpClient, standardOut, standardError, options.Verbose);
+        var downloadResult = await downloader.DownloadAsync(plan, options, cancellationToken);
+        if (!downloadResult.Success)
+        {
+            standardError.WriteLine("Failed to download the requested artifact from any candidate URL.");
+            return 1;
+        }
+
+        standardOut.WriteLine($"Extracting archive to {installRoot}");
+        var extractor = new ArchiveExtractor(standardOut, options.Verbose);
+
+        try
+        {
+            extractor.Extract(downloadResult.DownloadPath!, installRoot, options.OverrideNonVersionedFiles, cancellationToken);
+            InstallVerifier.VerifyInstalled(plan, installRoot);
+        }
+        finally
+        {
+            if (!options.KeepZip)
+            {
+                TryDeleteArchive(downloadResult.DownloadPath, standardOut, standardError, options.Verbose);
+            }
+        }
+
+        InstallEnvironment.ConfigurePath(installRoot, options.NoPath, options.PersistPath, options.Verbose, shouldUpdatePath, standardOut);
+        standardOut.WriteLine($"Installation finished successfully: {plan.ProductKind} {plan.ProductVersion}");
+        return 0;
+    }
+
     private static void WritePlan(InstallPlan plan, InstallOptions options, string installRoot, TextWriter standardOut)
     {
         standardOut.WriteLine($"dotnet-install plan for channel {plan.ChannelVersion} ({plan.ReleaseVersion})");
@@ -215,6 +316,46 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
         }
         standardOut.WriteLine($"DryRun: {options.DryRun} | KeepZip: {options.KeepZip} | ZipPath: {options.ZipPath?.FullName ?? "<temp>"}");
     }
+
+    private static void WriteUpdatePlan(UpdatePlan plan, UpdateOptions options, TextWriter standardOut)
+    {
+        standardOut.WriteLine($"dotnet-install update plan for {InstallVerifier.GetAssetDisplayName(plan.ProductKind)}");
+        standardOut.WriteLine($"RequestedVersion: {plan.RequestedVersion}");
+        standardOut.WriteLine($"ResolvedVersion: {plan.ResolvedVersion} | Channel: {plan.ChannelVersion}");
+        standardOut.WriteLine($"InstallRoot: {plan.InstallRoot}");
+        standardOut.WriteLine($"InstallRequired: {plan.InstallRequired} | DryRun: {options.DryRun}");
+        standardOut.WriteLine(BuildUpdateInstallStatusMessage(plan));
+        standardOut.WriteLine("Installed versions in channel:");
+        if (plan.InstalledVersions.Count == 0)
+        {
+            standardOut.WriteLine("  <none>");
+        }
+        else
+        {
+            for (var i = 0; i < plan.InstalledVersions.Count; i++)
+            {
+                standardOut.WriteLine($"  [{i}] {plan.InstalledVersions[i]}");
+            }
+        }
+
+        standardOut.WriteLine("Obsolete versions to remove:");
+        if (plan.ObsoleteVersions.Count == 0)
+        {
+            standardOut.WriteLine("  <none>");
+        }
+        else
+        {
+            for (var i = 0; i < plan.ObsoleteVersions.Count; i++)
+            {
+                standardOut.WriteLine($"  [{i}] {plan.ObsoleteVersions[i]}");
+            }
+        }
+    }
+
+    internal static string BuildUpdateInstallStatusMessage(UpdatePlan plan) =>
+        plan.InstallRequired
+            ? $"Latest requested {InstallVerifier.GetAssetDisplayName(plan.ProductKind)} version '{plan.ResolvedVersion}' is not installed and would be installed."
+            : $"Latest requested {InstallVerifier.GetAssetDisplayName(plan.ProductKind)} version '{plan.ResolvedVersion}' is already installed.";
 
     private static void TryDeleteArchive(string? archivePath, TextWriter standardOut, TextWriter standardError, bool verbose)
     {

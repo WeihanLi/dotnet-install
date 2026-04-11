@@ -26,6 +26,7 @@ dotnet-install --help
 dotnet-install version
 dotnet-install --dry-run --channel LTS
 dotnet-install --version 10.0.x
+dotnet-install update 10.0.x --dry-run
 ```
 
 ## Common Tasks
@@ -60,6 +61,12 @@ Preview a removal before deleting anything:
 dotnet-install remove 8.0.204 --dry-run
 ```
 
+Preview an update before installing/removing anything:
+
+```bash
+dotnet-install update 10.0.x --dry-run
+```
+
 ## Highlights
 
 - Familiar `dotnet-install` semantics in managed code
@@ -74,6 +81,7 @@ dotnet-install remove 8.0.204 --dry-run
 - `--persist-path` is supported only on Windows and cannot be combined with `--no-path`
 - If another .NET installation is already discoverable, PATH mutation is skipped to avoid shadowing it
 - `remove` is destructive and should be previewed with `--dry-run` first
+- `update` skips installation when the resolved version is already present and removes other installed versions in the same major.minor channel
 
 ## Project
 

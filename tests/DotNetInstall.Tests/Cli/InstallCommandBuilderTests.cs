@@ -217,8 +217,44 @@ public sealed class InstallCommandBuilderTests
         await InvokeAsync(root, ["remove", "8.0.205"]);
 
         Assert.Empty(_orchestrator.InstallCalls);
+        Assert.Empty(_orchestrator.UpdateCalls);
         var removeOpts = Assert.Single(_orchestrator.RemoveCalls);
         Assert.Equal("8.0.205", removeOpts.Version);
+    }
+
+    [Fact]
+    public async Task UpdateSubcommand_InvokesUpdate()
+    {
+        var root = BuildRoot();
+        await InvokeAsync(root, ["update", "10.0.x"]);
+
+        Assert.Empty(_orchestrator.InstallCalls);
+        Assert.Empty(_orchestrator.RemoveCalls);
+        var updateOpts = Assert.Single(_orchestrator.UpdateCalls);
+        Assert.Equal("10.0.x", updateOpts.Version);
+        Assert.False(updateOpts.Runtime);
+        Assert.False(updateOpts.DryRun);
+        Assert.Equal("<auto>", updateOpts.InstallDir);
+    }
+
+    [Fact]
+    public async Task UpdateSubcommand_WithRuntimeFlag_SetsRuntime()
+    {
+        var root = BuildRoot();
+        await InvokeAsync(root, ["update", "10.0.x", "--runtime"]);
+
+        var updateOpts = Assert.Single(_orchestrator.UpdateCalls);
+        Assert.True(updateOpts.Runtime);
+    }
+
+    [Fact]
+    public async Task UpdateSubcommand_WithDryRunFlag_SetsDryRun()
+    {
+        var root = BuildRoot();
+        await InvokeAsync(root, ["update", "10.0.200", "--dry-run"]);
+
+        var updateOpts = Assert.Single(_orchestrator.UpdateCalls);
+        Assert.True(updateOpts.DryRun);
     }
 
     [Fact]
