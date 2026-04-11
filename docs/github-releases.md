@@ -58,6 +58,7 @@ After placing the executable, confirm the tool is runnable:
 ```sh
 dotnet-install version
 dotnet-install --help
+dotnet-install self-update --dry-run
 ```
 
 If the command is not found, the binary directory is not on your shell `PATH`. Run the file by path or add its directory to PATH explicitly.
@@ -91,3 +92,11 @@ When those install commands complete:
 - PATH updates are skipped if an existing .NET installation is already discoverable, to avoid shadowing it
 
 Use `--dry-run` first if you want to inspect the resolved install plan before downloading anything.
+
+When you already run the tool from a GitHub release binary, you can update that executable in place with:
+
+```sh
+dotnet-install self-update
+```
+
+The command resolves the latest matching release asset for the current RID, verifies the `.sha256` sidecar, and replaces the current executable. On Windows, the replacement completes after the current process exits.

@@ -77,7 +77,8 @@ internal static class InstallCommandBuilder
         root.Add(runtimeIdOption);
         root.Add(osOption);
         root.Add(downloadTimeoutOption);
-        root.Add(CreateUpdateCommand());
+        root.Add(CreateUpgradeCommand());
+        root.Add(CreateSelfUpdateCommand());
         root.Add(CreateRemoveCommand());
         root.Add(CreateVersionCommand());
 
@@ -136,35 +137,35 @@ internal static class InstallCommandBuilder
             parseResult.GetValue(osOption),
             parseResult.GetValue(downloadTimeoutOption));
 
-        Command CreateUpdateCommand()
+        Command CreateUpgradeCommand()
         {
-            var updateCommand = new Command("update", "Install the requested SDK/runtime version and remove obsolete versions in the same channel");
+            var upgradeCommand = new Command("upgrade", "Install the requested SDK/runtime version and remove obsolete versions in the same channel");
 
             var versionArgument = new Argument<string>("version")
             {
-                Description = "SDK or runtime version to update to",
+                Description = "SDK or runtime version to upgrade to",
                 Arity = ArgumentArity.ExactlyOne
             };
 
-            var updateRuntimeOption = CreateBoolOption("--runtime", "Update only the .NET runtime");
-            var updateDryRunOption = CreateBoolOption("--dry-run", "Emit the update plan without installing or removing anything", "-DryRun");
+            var updateRuntimeOption = CreateBoolOption("--runtime", "Upgrade only the .NET runtime");
+            var updateDryRunOption = CreateBoolOption("--dry-run", "Emit the upgrade plan without installing or removing anything", "-DryRun");
             var updateInstallDirOption = CreateStringOption("--install-dir", "Installation root", "<auto>", "--dir", "--folder");
 
-            updateCommand.Add(versionArgument);
-            updateCommand.Add(updateRuntimeOption);
-            updateCommand.Add(updateDryRunOption);
-            updateCommand.Add(updateInstallDirOption);
+            upgradeCommand.Add(versionArgument);
+            upgradeCommand.Add(updateRuntimeOption);
+            upgradeCommand.Add(updateDryRunOption);
+            upgradeCommand.Add(updateInstallDirOption);
 
-            updateCommand.Validators.Add(result =>
+            upgradeCommand.Validators.Add(result =>
             {
                 var versionValue = result.GetValue(versionArgument);
                 if (string.IsNullOrWhiteSpace(versionValue))
                 {
-                    result.AddError("A version argument is required when updating an SDK/runtime.");
+                    result.AddError("A version argument is required when upgrading an SDK/runtime.");
                 }
             });
 
-            updateCommand.SetAction(async (parseResult, invocationToken) =>
+            upgradeCommand.SetAction(async (parseResult, invocationToken) =>
             {
                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(invocationToken, externalToken);
                 var updateOptions = BindUpdateOptions(parseResult);
@@ -174,13 +175,32 @@ internal static class InstallCommandBuilder
                 return exitCode;
             });
 
-            return updateCommand;
+            return upgradeCommand;
 
             UpdateOptions BindUpdateOptions(ParseResult parseResult) => new(
                 parseResult.GetValue(versionArgument)!,
                 parseResult.GetValue(updateRuntimeOption),
                 parseResult.GetValue(updateDryRunOption),
                 parseResult.GetValue(updateInstallDirOption)!);
+        }
+
+        Command CreateSelfUpdateCommand()
+        {
+            var selfUpdateCommand = new Command("self-update", "Update the dotnet-install executable from GitHub releases");
+            var selfUpdateDryRunOption = CreateBoolOption("--dry-run", "Resolve the latest release asset without downloading or replacing the executable", "-DryRun");
+
+            selfUpdateCommand.Add(selfUpdateDryRunOption);
+            selfUpdateCommand.SetAction(async (parseResult, invocationToken) =>
+            {
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(invocationToken, externalToken);
+                var options = new SelfUpdateOptions(parseResult.GetValue(selfUpdateDryRunOption));
+                var output = parseResult.InvocationConfiguration.Output ?? Console.Out;
+                var error = parseResult.InvocationConfiguration.Error ?? Console.Error;
+                var exitCode = await orchestrator.ExecuteSelfUpdateAsync(options, output, error, linkedCts.Token);
+                return exitCode;
+            });
+
+            return selfUpdateCommand;
         }
 
         Command CreateRemoveCommand()

@@ -67,6 +67,7 @@ public sealed class InstallOrchestratorTests : IDisposable
                 stdout,
                 verbose,
                 _ => throw new UnauthorizedAccessException("Access denied.")),
+            static () => new FakeSelfUpdater(),
             new StringReader("yes"),
             static () => false);
 
@@ -98,6 +99,7 @@ public sealed class InstallOrchestratorTests : IDisposable
                 stdout,
                 verbose,
                 _ => throw new UnauthorizedAccessException("Access denied.")),
+            static () => new FakeSelfUpdater(),
             new StringReader("yes"),
             static () => false);
 
@@ -265,5 +267,19 @@ public sealed class InstallOrchestratorTests : IDisposable
             failureReason = _failureReason;
             return _canLaunch;
         }
+    }
+
+    private sealed class FakeSelfUpdater : ISelfUpdater
+    {
+        public void Dispose()
+        {
+        }
+
+        public Task<int> ExecuteAsync(
+            SelfUpdateOptions options,
+            TextWriter standardOut,
+            TextWriter standardError,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(0);
     }
 }

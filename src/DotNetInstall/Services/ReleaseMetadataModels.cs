@@ -40,3 +40,13 @@ internal sealed record ReleaseFile(
     [property: JsonPropertyName("rid")] string Rid,
     [property: JsonPropertyName("url")] string Url,
     [property: JsonPropertyName("hash")] string? Hash);
+
+internal sealed record GitHubRelease(
+    [property: JsonPropertyName("tag_name")] string TagName,
+    [property: JsonPropertyName("draft")] bool Draft,
+    [property: JsonPropertyName("prerelease")] bool Prerelease,
+    [property: JsonPropertyName("assets")] IReadOnlyList<GitHubReleaseAsset>? Assets);
+
+internal sealed record GitHubReleaseAsset(
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("browser_download_url")] string DownloadUrl);

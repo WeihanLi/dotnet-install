@@ -7,6 +7,7 @@ internal sealed class FakeInstallOrchestrator : IInstallOrchestrator
 {
     public List<InstallOptions> InstallCalls { get; } = [];
     public List<UpdateOptions> UpdateCalls { get; } = [];
+    public List<SelfUpdateOptions> SelfUpdateCalls { get; } = [];
     public List<RemoveOptions> RemoveCalls { get; } = [];
 
     public Task<int> ExecuteAsync(
@@ -26,6 +27,16 @@ internal sealed class FakeInstallOrchestrator : IInstallOrchestrator
         CancellationToken cancellationToken)
     {
         UpdateCalls.Add(options);
+        return Task.FromResult(0);
+    }
+
+    public Task<int> ExecuteSelfUpdateAsync(
+        SelfUpdateOptions options,
+        TextWriter standardOut,
+        TextWriter standardError,
+        CancellationToken cancellationToken)
+    {
+        SelfUpdateCalls.Add(options);
         return Task.FromResult(0);
     }
 

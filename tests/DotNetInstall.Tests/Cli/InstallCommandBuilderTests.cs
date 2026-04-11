@@ -223,10 +223,10 @@ public sealed class InstallCommandBuilderTests
     }
 
     [Fact]
-    public async Task UpdateSubcommand_InvokesUpdate()
+    public async Task UpgradeSubcommand_InvokesUpdate()
     {
         var root = BuildRoot();
-        await InvokeAsync(root, ["update", "10.0.x"]);
+        await InvokeAsync(root, ["upgrade", "10.0.x"]);
 
         Assert.Empty(_orchestrator.InstallCalls);
         Assert.Empty(_orchestrator.RemoveCalls);
@@ -238,23 +238,36 @@ public sealed class InstallCommandBuilderTests
     }
 
     [Fact]
-    public async Task UpdateSubcommand_WithRuntimeFlag_SetsRuntime()
+    public async Task UpgradeSubcommand_WithRuntimeFlag_SetsRuntime()
     {
         var root = BuildRoot();
-        await InvokeAsync(root, ["update", "10.0.x", "--runtime"]);
+        await InvokeAsync(root, ["upgrade", "10.0.x", "--runtime"]);
 
         var updateOpts = Assert.Single(_orchestrator.UpdateCalls);
         Assert.True(updateOpts.Runtime);
     }
 
     [Fact]
-    public async Task UpdateSubcommand_WithDryRunFlag_SetsDryRun()
+    public async Task UpgradeSubcommand_WithDryRunFlag_SetsDryRun()
     {
         var root = BuildRoot();
-        await InvokeAsync(root, ["update", "10.0.200", "--dry-run"]);
+        await InvokeAsync(root, ["upgrade", "10.0.200", "--dry-run"]);
 
         var updateOpts = Assert.Single(_orchestrator.UpdateCalls);
         Assert.True(updateOpts.DryRun);
+    }
+
+    [Fact]
+    public async Task SelfUpdateSubcommand_WithDryRunFlag_InvokesSelfUpdate()
+    {
+        var root = BuildRoot();
+        await InvokeAsync(root, ["self-update", "--dry-run"]);
+
+        Assert.Empty(_orchestrator.InstallCalls);
+        Assert.Empty(_orchestrator.UpdateCalls);
+        Assert.Empty(_orchestrator.RemoveCalls);
+        var selfUpdateOptions = Assert.Single(_orchestrator.SelfUpdateCalls);
+        Assert.True(selfUpdateOptions.DryRun);
     }
 
     [Fact]

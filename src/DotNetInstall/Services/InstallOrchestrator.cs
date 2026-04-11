@@ -8,6 +8,7 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
 {
     private readonly IRemovalElevationManager _removalElevationManager;
     private readonly Func<TextWriter, bool, InstallRemover> _removerFactory;
+    private readonly Func<ISelfUpdater> _selfUpdaterFactory;
     private readonly TextReader _input;
     private readonly Func<bool> _isInputRedirected;
 
@@ -15,6 +16,7 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
         : this(
             new WindowsRemovalElevationManager(),
             (stdout, verbose) => new InstallRemover(stdout, verbose),
+            static () => new SelfUpdater(),
             Console.In,
             static () => Console.IsInputRedirected)
     {
@@ -23,11 +25,13 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
     internal InstallOrchestrator(
         IRemovalElevationManager removalElevationManager,
         Func<TextWriter, bool, InstallRemover> removerFactory,
+        Func<ISelfUpdater> selfUpdaterFactory,
         TextReader input,
         Func<bool> isInputRedirected)
     {
         _removalElevationManager = removalElevationManager;
         _removerFactory = removerFactory;
+        _selfUpdaterFactory = selfUpdaterFactory;
         _input = input;
         _isInputRedirected = isInputRedirected;
     }
@@ -86,7 +90,7 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
             var metadataClient = new ReleaseMetadataClient(httpClient);
             var updatePlan = await UpdatePlanner.BuildAsync(options, metadataClient, cancellationToken);
 
-            WriteUpdatePlan(updatePlan, options, standardOut);
+            WriteUpgradePlan(updatePlan, options, standardOut);
 
             if (options.DryRun)
             {
@@ -118,7 +122,7 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
             if (updatePlan.ObsoleteVersions.Count == 0)
             {
                 standardOut.WriteLine("No obsolete versions were found to remove.");
-                standardOut.WriteLine($"Update finished successfully: {updatePlan.ProductKind} {updatePlan.ResolvedVersion}");
+                standardOut.WriteLine($"Upgrade finished successfully: {updatePlan.ProductKind} {updatePlan.ResolvedVersion}");
                 return 0;
             }
 
@@ -146,8 +150,31 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
                 remover.Remove(removalPlan, updatePlan.InstallRoot, dryRun: false, cancellationToken);
             }
 
-            standardOut.WriteLine($"Update finished successfully: {updatePlan.ProductKind} {updatePlan.ResolvedVersion}");
+            standardOut.WriteLine($"Upgrade finished successfully: {updatePlan.ProductKind} {updatePlan.ResolvedVersion}");
             return 0;
+        }
+        catch (InstallException ex)
+        {
+            standardError.WriteLine(ex.Message);
+            return 1;
+        }
+        catch (OperationCanceledException)
+        {
+            standardError.WriteLine("Operation cancelled.");
+            return 1;
+        }
+    }
+
+    public async Task<int> ExecuteSelfUpdateAsync(
+        SelfUpdateOptions options,
+        TextWriter standardOut,
+        TextWriter standardError,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var selfUpdater = _selfUpdaterFactory();
+            return await selfUpdater.ExecuteAsync(options, standardOut, standardError, cancellationToken);
         }
         catch (InstallException ex)
         {
@@ -317,9 +344,9 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
         standardOut.WriteLine($"DryRun: {options.DryRun} | KeepZip: {options.KeepZip} | ZipPath: {options.ZipPath?.FullName ?? "<temp>"}");
     }
 
-    private static void WriteUpdatePlan(UpdatePlan plan, UpdateOptions options, TextWriter standardOut)
+    private static void WriteUpgradePlan(UpdatePlan plan, UpdateOptions options, TextWriter standardOut)
     {
-        standardOut.WriteLine($"dotnet-install update plan for {InstallVerifier.GetAssetDisplayName(plan.ProductKind)}");
+        standardOut.WriteLine($"dotnet-install upgrade plan for {InstallVerifier.GetAssetDisplayName(plan.ProductKind)}");
         standardOut.WriteLine($"RequestedVersion: {plan.RequestedVersion}");
         standardOut.WriteLine($"ResolvedVersion: {plan.ResolvedVersion} | Channel: {plan.ChannelVersion}");
         standardOut.WriteLine($"InstallRoot: {plan.InstallRoot}");
