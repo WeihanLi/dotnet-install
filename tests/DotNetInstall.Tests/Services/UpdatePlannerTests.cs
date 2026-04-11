@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using DotNetInstall.Options;
 using DotNetInstall.Services;
 
@@ -126,7 +127,7 @@ public sealed class UpdatePlannerTests : IDisposable
 
     private static ReleaseEntry CreateSdkRelease(string releaseVersion, string releaseDate, string sdkVersion)
     {
-        const string rid = "win-x64";
+        var rid = RuntimeInformation.RuntimeIdentifier;
 
         var sdkFile = new ReleaseFile(
             Name: $"dotnet-sdk-{sdkVersion}-{rid}.zip",
@@ -150,5 +151,25 @@ public sealed class UpdatePlannerTests : IDisposable
             Runtime: runtime,
             AspNetCoreRuntime: null,
             WindowsDesktopRuntime: null);
+    }
+
+    private static string GetCurrentRid()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return "win-x64";
+        }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            return "osx-x64";
+        }
+
+        if (OperatingSystem.IsLinux())
+        {
+            return "linux-x64";
+        }
+
+        throw new InvalidOperationException("Unsupported test host operating system.");
     }
 }
