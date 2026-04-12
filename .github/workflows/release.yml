@@ -84,9 +84,9 @@ jobs:
       - name: Test
         run: dotnet test DotNetInstall.slnx -c Release --no-build
 
-      - name: Install native AOT prerequisites
-        if: matrix.native_prerequisites != ''
-        run: ${{ matrix.native_prerequisites }}
+      # - name: Install native AOT prerequisites
+      #   if: matrix.native_prerequisites != ''
+      #   run: ${{ matrix.native_prerequisites }}
 
       - name: Publish
         run: >-
