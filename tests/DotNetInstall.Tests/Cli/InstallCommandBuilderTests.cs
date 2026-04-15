@@ -233,6 +233,7 @@ public sealed class InstallCommandBuilderTests
         var updateOpts = Assert.Single(_orchestrator.UpdateCalls);
         Assert.Equal("10.0.x", updateOpts.Version);
         Assert.False(updateOpts.Runtime);
+        Assert.False(updateOpts.SdkOnly);
         Assert.False(updateOpts.DryRun);
         Assert.Equal("<auto>", updateOpts.InstallDir);
     }
@@ -245,6 +246,30 @@ public sealed class InstallCommandBuilderTests
 
         var updateOpts = Assert.Single(_orchestrator.UpdateCalls);
         Assert.True(updateOpts.Runtime);
+    }
+
+    [Fact]
+    public async Task UpgradeSubcommand_WithSdkOnlyFlag_SetsSdkOnly()
+    {
+        var root = BuildRoot();
+        await InvokeAsync(root, ["upgrade", "10.0.x", "--sdk-only"]);
+
+        var updateOpts = Assert.Single(_orchestrator.UpdateCalls);
+        Assert.True(updateOpts.SdkOnly);
+    }
+
+    [Fact]
+    public async Task UpgradeSubcommand_WithRuntimeAndSdkOnlyFlags_ReturnsParseError()
+    {
+        var root = BuildRoot();
+        var error = new StringWriter();
+        var parseResult = root.Parse(["upgrade", "10.0.x", "--runtime", "--sdk-only"]);
+        var exitCode = await parseResult.InvokeAsync(
+            new InvocationConfiguration { Output = TextWriter.Null, Error = error },
+            CancellationToken.None);
+
+        Assert.NotEqual(0, exitCode);
+        Assert.Empty(_orchestrator.UpdateCalls);
     }
 
     [Fact]

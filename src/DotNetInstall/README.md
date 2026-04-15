@@ -68,6 +68,12 @@ Preview an upgrade before installing/removing anything:
 dotnet-install upgrade 10.0.x --dry-run
 ```
 
+Upgrade an SDK but keep its related runtime packs and shared runtime:
+
+```bash
+dotnet-install upgrade 10.0.x --sdk-only
+```
+
 ## Highlights
 
 - Familiar `dotnet-install` semantics in managed code
@@ -83,6 +89,7 @@ dotnet-install upgrade 10.0.x --dry-run
 - If another .NET installation is already discoverable, PATH mutation is skipped to avoid shadowing it
 - `remove` is destructive and should be previewed with `--dry-run` first
 - `upgrade` skips installation when the resolved version is already present and removes other installed versions in the same major.minor channel
+- `upgrade` removes the related runtime by default when pruning obsolete SDKs; use `--sdk-only` to keep the runtime installed
 - `self-update` replaces the current executable with the latest matching GitHub release asset for the current RID
 
 ## Project

@@ -23,7 +23,7 @@ public sealed class UpdatePlannerTests : IDisposable
             CreateSdkRelease("10.0.4", "2026-02-10", "10.0.201"));
 
         var plan = await UpdatePlanner.BuildAsync(
-            new UpdateOptions("10.0.x", Runtime: false, DryRun: false, InstallDir: _root),
+            new UpdateOptions("10.0.x", Runtime: false, SdkOnly: false, DryRun: false, InstallDir: _root),
             client,
             CancellationToken.None);
 
@@ -45,7 +45,7 @@ public sealed class UpdatePlannerTests : IDisposable
             CreateSdkRelease("10.0.4", "2026-02-10", "10.0.201"));
 
         var plan = await UpdatePlanner.BuildAsync(
-            new UpdateOptions("10.0.x", Runtime: false, DryRun: false, InstallDir: _root),
+            new UpdateOptions("10.0.x", Runtime: false, SdkOnly: false, DryRun: false, InstallDir: _root),
             client,
             CancellationToken.None);
 
@@ -64,7 +64,7 @@ public sealed class UpdatePlannerTests : IDisposable
             CreateSdkRelease("10.0.4", "2026-02-10", "10.0.201"));
 
         var plan = await UpdatePlanner.BuildAsync(
-            new UpdateOptions("10.0.201", Runtime: false, DryRun: false, InstallDir: _root),
+            new UpdateOptions("10.0.201", Runtime: false, SdkOnly: false, DryRun: false, InstallDir: _root),
             client,
             CancellationToken.None);
 
@@ -83,7 +83,7 @@ public sealed class UpdatePlannerTests : IDisposable
             CreateSdkRelease("10.0.4", "2026-02-10", "10.0.201"));
 
         var plan = await UpdatePlanner.BuildAsync(
-            new UpdateOptions("10.0.x", Runtime: true, DryRun: false, InstallDir: _root),
+            new UpdateOptions("10.0.x", Runtime: true, SdkOnly: false, DryRun: false, InstallDir: _root),
             client,
             CancellationToken.None);
 

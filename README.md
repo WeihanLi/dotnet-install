@@ -152,6 +152,12 @@ Preview an SDK upgrade before installing/removing anything:
 dotnet-install upgrade 10.0.x --dry-run
 ```
 
+Upgrade an SDK and keep the related runtime installed:
+
+```sh
+dotnet-install upgrade 10.0.x --sdk-only
+```
+
 Upgrade only the .NET runtime in a channel:
 
 ```sh
@@ -237,6 +243,7 @@ Current behavior boundaries:
 - If another existing .NET installation is already discoverable from known locations, PATH mutation is skipped to avoid shadowing that install
 - `remove` is destructive and should be previewed with `--dry-run` first when targeting a shared install root
 - `upgrade` resolves the requested SDK/runtime version, skips installation when that resolved version is already present, and removes other installed versions in the same major.minor channel
+- SDK upgrades remove the related runtime by default when pruning obsolete SDKs; use `upgrade --sdk-only` to keep the runtime installed
 - `self-update` replaces the current executable with the latest matching GitHub release asset for the current RID
 
 ## Command Surface
@@ -286,6 +293,7 @@ The `upgrade` subcommand currently accepts:
 
 - A required `<version>` argument such as `10.0.201` or `10.0.x`
 - `--runtime` to upgrade only the .NET runtime
+- `--sdk-only` to keep the related runtime when upgrading an SDK
 - `--install-dir`
 - `--dry-run`
 

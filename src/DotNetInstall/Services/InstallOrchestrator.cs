@@ -136,7 +136,7 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
                 standardOut.WriteLine($"Removing obsolete {InstallVerifier.GetAssetDisplayName(updatePlan.ProductKind)} version '{obsoleteVersion}'.");
                 var removalPlan = await resolver.ResolveAsync(
                     obsoleteVersion,
-                    sdkOnly: false,
+                    options.SdkOnly,
                     updatePlan.InstallRoot,
                     metadataClient,
                     cancellationToken);

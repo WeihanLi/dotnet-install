@@ -148,11 +148,13 @@ internal static class InstallCommandBuilder
             };
 
             var updateRuntimeOption = CreateBoolOption("--runtime", "Upgrade only the .NET runtime");
+            var updateSdkOnlyOption = CreateBoolOption("--sdk-only", "Remove only obsolete SDK directories and keep related runtimes");
             var updateDryRunOption = CreateBoolOption("--dry-run", "Emit the upgrade plan without installing or removing anything", "-DryRun");
             var updateInstallDirOption = CreateStringOption("--install-dir", "Installation root", "<auto>", "--dir", "--folder");
 
             upgradeCommand.Add(versionArgument);
             upgradeCommand.Add(updateRuntimeOption);
+            upgradeCommand.Add(updateSdkOnlyOption);
             upgradeCommand.Add(updateDryRunOption);
             upgradeCommand.Add(updateInstallDirOption);
 
@@ -162,6 +164,11 @@ internal static class InstallCommandBuilder
                 if (string.IsNullOrWhiteSpace(versionValue))
                 {
                     result.AddError("A version argument is required when upgrading an SDK/runtime.");
+                }
+
+                if (result.GetValue(updateRuntimeOption) && result.GetValue(updateSdkOnlyOption))
+                {
+                    result.AddError("The --sdk-only option can only be used when upgrading an SDK.");
                 }
             });
 
@@ -180,6 +187,7 @@ internal static class InstallCommandBuilder
             UpdateOptions BindUpdateOptions(ParseResult parseResult) => new(
                 parseResult.GetValue(versionArgument)!,
                 parseResult.GetValue(updateRuntimeOption),
+                parseResult.GetValue(updateSdkOnlyOption),
                 parseResult.GetValue(updateDryRunOption),
                 parseResult.GetValue(updateInstallDirOption)!);
         }
