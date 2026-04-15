@@ -86,6 +86,9 @@ dotnet-install upgrade 10.0.x 11.0.x
 
 # Update the dotnet-install executable itself from GitHub releases
 dotnet-install self-update --dry-run
+
+# Include preview GitHub releases when self-updating
+dotnet-install self-update --prerelease
 ```
 
 If you prefer a standalone executable instead of a .NET tool, jump to [Install The Tool](#install-the-tool).
@@ -179,6 +182,12 @@ Preview a self-update from GitHub releases:
 dotnet-install self-update --dry-run
 ```
 
+Include preview releases when self-updating:
+
+```sh
+dotnet-install self-update --prerelease
+```
+
 ## GitHub Action
 
 This repository also ships a first-party composite action at [action.yml](action.yml) for workflows that want to install an SDK through this repo's managed `dotnet-install` release binary instead of `actions/setup-dotnet`.
@@ -254,6 +263,7 @@ Current behavior boundaries:
 - `upgrade` resolves the requested SDK/runtime version, skips installation when that resolved version is already present, and removes other installed versions in the same major.minor channel
 - SDK upgrades remove the related runtime by default when pruning obsolete SDKs; use `upgrade --sdk-only` to keep the runtime installed
 - `self-update` replaces the current executable with the latest matching GitHub release asset for the current RID
+- `self-update --prerelease` includes preview releases, and prerelease builds enable that behavior by default
 
 ## Command Surface
 
@@ -309,6 +319,7 @@ The `upgrade` subcommand currently accepts:
 The `self-update` subcommand currently accepts:
 
 - `--dry-run`
+- `--prerelease`
 
 ## PATH Behavior
 

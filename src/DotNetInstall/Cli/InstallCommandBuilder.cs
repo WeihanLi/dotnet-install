@@ -196,12 +196,19 @@ internal static class InstallCommandBuilder
         {
             var selfUpdateCommand = new Command("self-update", "Update the dotnet-install executable from GitHub releases");
             var selfUpdateDryRunOption = CreateBoolOption("--dry-run", "Resolve the latest release asset without downloading or replacing the executable", "-DryRun");
+            var selfUpdatePrereleaseOption = CreateBoolOptionWithDefault(
+                "--prerelease",
+                "Include prerelease GitHub releases when resolving a self-update target",
+                IsPrereleaseVersion(GetToolVersion()));
 
             selfUpdateCommand.Add(selfUpdateDryRunOption);
+            selfUpdateCommand.Add(selfUpdatePrereleaseOption);
             selfUpdateCommand.SetAction(async (parseResult, invocationToken) =>
             {
                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(invocationToken, externalToken);
-                var options = new SelfUpdateOptions(parseResult.GetValue(selfUpdateDryRunOption));
+                var options = new SelfUpdateOptions(
+                    parseResult.GetValue(selfUpdateDryRunOption),
+                    parseResult.GetValue(selfUpdatePrereleaseOption));
                 var output = parseResult.InvocationConfiguration.Output ?? Console.Out;
                 var error = parseResult.InvocationConfiguration.Error ?? Console.Error;
                 var exitCode = await orchestrator.ExecuteSelfUpdateAsync(options, output, error, linkedCts.Token);
@@ -350,13 +357,28 @@ internal static class InstallCommandBuilder
         var versionCommand = new Command("version", "Show the dotnet-install tool version");
         versionCommand.SetAction((parseResult, _) =>
         {
-            var version = typeof(InstallCommandBuilder).Assembly
-                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-                ?.InformationalVersion ?? "unknown";
+            var version = GetToolVersion();
             var output = parseResult.InvocationConfiguration.Output ?? Console.Out;
             output.WriteLine(version);
             return Task.FromResult(0);
         });
         return versionCommand;
+    }
+
+    internal static string GetToolVersion() =>
+        typeof(InstallCommandBuilder).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion ?? "unknown";
+
+    internal static bool IsPrereleaseVersion(string version)
+    {
+        var normalized = version.Trim().TrimStart('v', 'V');
+        var buildMetadataSeparator = normalized.IndexOf('+');
+        if (buildMetadataSeparator >= 0)
+        {
+            normalized = normalized[..buildMetadataSeparator];
+        }
+
+        return normalized.Contains('-', StringComparison.Ordinal);
     }
 }

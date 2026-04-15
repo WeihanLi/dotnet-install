@@ -29,6 +29,7 @@ dotnet-install --version 10.0.x
 dotnet-install upgrade 10.0.x --dry-run
 dotnet-install upgrade 10.0.x 11.0.x
 dotnet-install self-update --dry-run
+dotnet-install self-update --prerelease
 ```
 
 ## Common Tasks
@@ -98,6 +99,7 @@ dotnet-install upgrade 10.0.x --sdk-only
 - `upgrade` skips installation when the resolved version is already present and removes other installed versions in the same major.minor channel
 - `upgrade` removes the related runtime by default when pruning obsolete SDKs; use `--sdk-only` to keep the runtime installed
 - `self-update` replaces the current executable with the latest matching GitHub release asset for the current RID
+- `self-update --prerelease` includes preview releases, and prerelease builds enable that behavior by default
 
 ## Project
 

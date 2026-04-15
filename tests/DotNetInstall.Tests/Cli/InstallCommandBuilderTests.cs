@@ -306,6 +306,28 @@ public sealed class InstallCommandBuilderTests
     }
 
     [Fact]
+    public async Task SelfUpdateSubcommand_DefaultsPrereleaseBasedOnCurrentVersion()
+    {
+        var root = BuildRoot();
+        await InvokeAsync(root, ["self-update"]);
+
+        var selfUpdateOptions = Assert.Single(_orchestrator.SelfUpdateCalls);
+        Assert.Equal(
+            InstallCommandBuilder.IsPrereleaseVersion(InstallCommandBuilder.GetToolVersion()),
+            selfUpdateOptions.Prerelease);
+    }
+
+    [Fact]
+    public async Task SelfUpdateSubcommand_WithPrereleaseFlag_InvokesSelfUpdate()
+    {
+        var root = BuildRoot();
+        await InvokeAsync(root, ["self-update", "--prerelease"]);
+
+        var selfUpdateOptions = Assert.Single(_orchestrator.SelfUpdateCalls);
+        Assert.True(selfUpdateOptions.Prerelease);
+    }
+
+    [Fact]
     public async Task RemoveSubcommand_WithInstallDir_SetsInstallDir()
     {
         var root = BuildRoot();

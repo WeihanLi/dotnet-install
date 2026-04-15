@@ -87,7 +87,7 @@ internal sealed class SelfUpdater : ISelfUpdater
         }
 
         var runtimeIdentifier = _runtimeIdentifierResolver();
-        var assetInfo = await ResolveLatestPublishedAssetAsync(runtimeIdentifier, cancellationToken);
+        var assetInfo = await ResolveLatestPublishedAssetAsync(runtimeIdentifier, options.Prerelease, cancellationToken);
         var currentVersion = NormalizeVersion(_currentVersionAccessor());
         var targetVersion = NormalizeVersion(assetInfo.NormalizedVersion);
 
@@ -240,6 +240,7 @@ internal sealed class SelfUpdater : ISelfUpdater
         standardOut.WriteLine($"RuntimeIdentifier: {runtimeIdentifier}");
         standardOut.WriteLine($"ExecutablePath: {currentExecutablePath}");
         standardOut.WriteLine($"DownloadUrl: {assetInfo.DownloadUrl}");
+        standardOut.WriteLine($"Prerelease: {options.Prerelease}");
         standardOut.WriteLine($"DryRun: {options.DryRun}");
     }
 
@@ -263,9 +264,9 @@ internal sealed class SelfUpdater : ISelfUpdater
         }
     }
 
-    private async Task<SelfUpdateAssetInfo> ResolveLatestPublishedAssetAsync(string runtimeIdentifier, CancellationToken cancellationToken)
+    private async Task<SelfUpdateAssetInfo> ResolveLatestPublishedAssetAsync(string runtimeIdentifier, bool includePrerelease, CancellationToken cancellationToken)
     {
-        var release = await GetLatestPublishedReleaseAsync(runtimeIdentifier, cancellationToken);
+        var release = await GetLatestPublishedReleaseAsync(runtimeIdentifier, includePrerelease, cancellationToken);
         var normalizedVersion = NormalizeVersion(release.TagName);
         var assetName = GetReleaseAssetName(normalizedVersion, runtimeIdentifier);
         var sha256Name = $"{assetName}.sha256";
@@ -281,12 +282,15 @@ internal sealed class SelfUpdater : ISelfUpdater
         return new SelfUpdateAssetInfo(release.TagName, normalizedVersion, binaryAsset.DownloadUrl, sha256Asset.DownloadUrl);
     }
 
-    private async Task<GitHubRelease> GetLatestPublishedReleaseAsync(string runtimeIdentifier, CancellationToken cancellationToken)
+    private async Task<GitHubRelease> GetLatestPublishedReleaseAsync(string runtimeIdentifier, bool includePrerelease, CancellationToken cancellationToken)
     {
-        var stableRelease = await TryGetLatestStableReleaseAsync(runtimeIdentifier, cancellationToken);
-        if (stableRelease is not null)
+        if (!includePrerelease)
         {
-            return stableRelease;
+            var stableRelease = await TryGetLatestStableReleaseAsync(runtimeIdentifier, cancellationToken);
+            if (stableRelease is not null)
+            {
+                return stableRelease;
+            }
         }
 
         var releases = await GetJsonAsync(
@@ -300,19 +304,14 @@ internal sealed class SelfUpdater : ISelfUpdater
             throw new InstallException($"No published releases were found for '{Repository}'.");
         }
 
-        var publishedStable = publishedReleases.FirstOrDefault(release => !release.Prerelease && HasRequiredAssets(release, runtimeIdentifier));
-        if (publishedStable is not null)
+        var publishedCandidate = publishedReleases.FirstOrDefault(release =>
+            HasRequiredAssets(release, runtimeIdentifier));
+        if (publishedCandidate is not null)
         {
-            return publishedStable;
+            return publishedCandidate;
         }
 
-        var publishedPrerelease = publishedReleases.FirstOrDefault(release => release.Prerelease && HasRequiredAssets(release, runtimeIdentifier));
-        if (publishedPrerelease is not null)
-        {
-            return publishedPrerelease;
-        }
-
-        throw new InstallException($"No stable or prerelease releases with matching assets were found for '{Repository}' and RID '{runtimeIdentifier}'.");
+        throw new InstallException($"No release with matching assets were found for '{Repository}' and RID '{runtimeIdentifier}'.");
     }
 
     private async Task<GitHubRelease?> TryGetLatestStableReleaseAsync(string runtimeIdentifier, CancellationToken cancellationToken)

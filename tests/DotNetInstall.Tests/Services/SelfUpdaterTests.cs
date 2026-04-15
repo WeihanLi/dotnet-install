@@ -53,10 +53,11 @@ public sealed class SelfUpdaterTests : IDisposable
             () => "win-x64");
 
         var output = new StringWriter();
-        var exitCode = await updater.ExecuteAsync(new SelfUpdateOptions(DryRun: true), output, TextWriter.Null, CancellationToken.None);
+        var exitCode = await updater.ExecuteAsync(new SelfUpdateOptions(DryRun: true, Prerelease: false), output, TextWriter.Null, CancellationToken.None);
 
         Assert.Equal(0, exitCode);
         Assert.False(applier.WasCalled);
+        Assert.Contains("Prerelease: False", output.ToString(), StringComparison.Ordinal);
         Assert.Contains("TargetVersion: 1.2.3", output.ToString(), StringComparison.Ordinal);
         Assert.Contains("DryRun: True", output.ToString(), StringComparison.Ordinal);
     }
@@ -115,11 +116,74 @@ public sealed class SelfUpdaterTests : IDisposable
             () => "linux-x64");
 
         var output = new StringWriter();
-        var exitCode = await updater.ExecuteAsync(new SelfUpdateOptions(DryRun: true), output, TextWriter.Null, CancellationToken.None);
+        var exitCode = await updater.ExecuteAsync(new SelfUpdateOptions(DryRun: true, Prerelease: false), output, TextWriter.Null, CancellationToken.None);
 
         Assert.Equal(0, exitCode);
         Assert.False(applier.WasCalled);
         Assert.Contains("TargetVersion: 2.0.0-rc.1", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithPrereleaseEnabled_PrefersPublishedPrerelease_WhenItIsNewest()
+    {
+        var executablePath = CreateExecutable("dotnet-install");
+        var stableAssetName = SelfUpdater.GetReleaseAssetName("2.0.0", "linux-x64");
+        var prereleaseAssetName = SelfUpdater.GetReleaseAssetName("2.1.0-preview.1", "linux-x64");
+        using var httpClient = CreateHttpClient(new Dictionary<string, Func<HttpResponseMessage>>
+        {
+            ["https://api.github.com/repos/WeihanLi/dotnet-install/releases?per_page=20"] = () => JsonResponse(
+                $$"""
+                [
+                  {
+                    "tag_name": "v2.1.0-preview.1",
+                    "draft": false,
+                    "prerelease": true,
+                    "assets": [
+                      {
+                        "name": "{{prereleaseAssetName}}",
+                        "browser_download_url": "https://downloads.test/{{prereleaseAssetName}}"
+                      },
+                      {
+                        "name": "{{prereleaseAssetName}}.sha256",
+                        "browser_download_url": "https://downloads.test/{{prereleaseAssetName}}.sha256"
+                      }
+                    ]
+                  },
+                  {
+                    "tag_name": "v2.0.0",
+                    "draft": false,
+                    "prerelease": false,
+                    "assets": [
+                      {
+                        "name": "{{stableAssetName}}",
+                        "browser_download_url": "https://downloads.test/{{stableAssetName}}"
+                      },
+                      {
+                        "name": "{{stableAssetName}}.sha256",
+                        "browser_download_url": "https://downloads.test/{{stableAssetName}}.sha256"
+                      }
+                    ]
+                  }
+                ]
+                """)
+        });
+
+        var applier = new FakeSelfUpdateApplier();
+        using var updater = new SelfUpdater(
+            httpClient,
+            disposeHttpClient: false,
+            applier,
+            () => executablePath,
+            () => "1.9.0",
+            () => "linux-x64");
+
+        var output = new StringWriter();
+        var exitCode = await updater.ExecuteAsync(new SelfUpdateOptions(DryRun: true, Prerelease: true), output, TextWriter.Null, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+        Assert.False(applier.WasCalled);
+        Assert.Contains("Prerelease: True", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("TargetVersion: 2.1.0-preview.1", output.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -170,7 +234,7 @@ public sealed class SelfUpdaterTests : IDisposable
             () => "win-x64");
 
         var output = new StringWriter();
-        var exitCode = await updater.ExecuteAsync(new SelfUpdateOptions(DryRun: false), output, TextWriter.Null, CancellationToken.None);
+        var exitCode = await updater.ExecuteAsync(new SelfUpdateOptions(DryRun: false, Prerelease: false), output, TextWriter.Null, CancellationToken.None);
 
         Assert.Equal(0, exitCode);
         Assert.True(applier.WasCalled);
@@ -216,7 +280,7 @@ public sealed class SelfUpdaterTests : IDisposable
             () => "win-x64");
 
         var output = new StringWriter();
-        var exitCode = await updater.ExecuteAsync(new SelfUpdateOptions(DryRun: false), output, TextWriter.Null, CancellationToken.None);
+        var exitCode = await updater.ExecuteAsync(new SelfUpdateOptions(DryRun: false, Prerelease: false), output, TextWriter.Null, CancellationToken.None);
 
         Assert.Equal(0, exitCode);
         Assert.False(applier.WasCalled);
