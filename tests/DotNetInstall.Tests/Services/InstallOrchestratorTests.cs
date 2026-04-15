@@ -115,6 +115,48 @@ public sealed class InstallOrchestratorTests : IDisposable
     }
 
     [Fact]
+    public async Task ExecuteRemovalOperationAsync_CanBeReusedWithoutCommandSummary()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "sdk", "8.0.205"));
+        Directory.CreateDirectory(Path.Combine(_root, "host", "fxr", "8.0.5"));
+        Directory.CreateDirectory(Path.Combine(_root, "shared", "Microsoft.NETCore.App", "8.0.5"));
+        Directory.CreateDirectory(Path.Combine(_root, "templates", "8.0.5"));
+        Directory.CreateDirectory(Path.Combine(_root, "packs", "Microsoft.NETCore.App.Ref", "8.0.5"));
+        Directory.CreateDirectory(Path.Combine(_root, "packs", "Microsoft.NETCore.App.Host.win-x64", "8.0.5"));
+
+        var orchestrator = new InstallOrchestrator(
+            new FakeRemovalElevationManager(canRetryAsAdministrator: false, elevatedExitCode: 1),
+            (stdout, verbose) => new InstallRemover(stdout, verbose),
+            static () => new FakeSelfUpdater(),
+            new StringReader("yes"),
+            static () => false);
+        var output = new StringWriter();
+        var error = new StringWriter();
+        var resolver = new RemovalVersionResolver();
+        var client = FakeReleaseMetadataClient.CreateSimple(
+            "8.0",
+            "lts",
+            FakeReleaseMetadataClient.CreateSdkReleaseDocument("8.0", "8.0.5", "8.0.205", "8.0.5"));
+
+        var exitCode = await orchestrator.ExecuteRemovalOperationAsync(
+            new RemoveOptions("8.0.205", _root, SdkOnly: false, DryRun: false, Verbose: false),
+            output,
+            error,
+            CancellationToken.None,
+            client,
+            resolver,
+            allowElevationRetry: false,
+            writeSummary: false);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(string.Empty, error.ToString());
+        Assert.DoesNotContain("Removal finished successfully", output.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(Path.Combine(_root, "sdk", "8.0.205")));
+        Assert.False(Directory.Exists(Path.Combine(_root, "shared", "Microsoft.NETCore.App", "8.0.5")));
+        Assert.False(Directory.Exists(Path.Combine(_root, "host", "fxr", "8.0.5")));
+    }
+
+    [Fact]
     public async Task ConfirmExistingInstallAsync_ReturnsFalse_WhenInputIsRedirected()
     {
         var plan = new InstallPlan(

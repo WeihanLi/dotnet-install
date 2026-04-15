@@ -127,27 +127,30 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
             }
 
             var resolver = new RemovalVersionResolver();
-            var remover = _removerFactory(standardOut, false);
 
             foreach (var obsoleteVersion in updatePlan.ObsoleteVersions)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
                 standardOut.WriteLine($"Removing obsolete {InstallVerifier.GetAssetDisplayName(updatePlan.ProductKind)} version '{obsoleteVersion}'.");
-                var removalPlan = await resolver.ResolveAsync(
-                    obsoleteVersion,
-                    options.SdkOnly,
-                    updatePlan.InstallRoot,
+                var exitCode = await ExecuteRemovalOperationAsync(
+                    new RemoveOptions(
+                        obsoleteVersion,
+                        updatePlan.InstallRoot,
+                        options.SdkOnly,
+                        DryRun: false,
+                        Verbose: false),
+                    standardOut,
+                    standardError,
+                    cancellationToken,
                     metadataClient,
-                    cancellationToken);
-                removalPlan = await FilterSharedTargetsAsync(
-                    removalPlan,
-                    updatePlan.InstallRoot,
                     resolver,
-                    metadataClient,
-                    cancellationToken);
-
-                remover.Remove(removalPlan, updatePlan.InstallRoot, dryRun: false, cancellationToken);
+                    allowElevationRetry: false,
+                    writeSummary: false);
+                if (exitCode != 0)
+                {
+                    return exitCode;
+                }
             }
 
             standardOut.WriteLine($"Upgrade finished successfully: {updatePlan.ProductKind} {updatePlan.ResolvedVersion}");
@@ -196,39 +199,7 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
     {
         try
         {
-            var installRoot = InstallEnvironment.ResolveInstallRoot(options.InstallDir ?? "<auto>");
-            var resolver = new RemovalVersionResolver();
-            using var metadataHttpClient = RemovalVersionResolver.CreateMetadataHttpClient();
-            var metadataClient = new ReleaseMetadataClient(metadataHttpClient);
-            var plan = await resolver.ResolveAsync(options.Version, options.SdkOnly, installRoot, metadataClient, cancellationToken);
-            plan = await FilterSharedTargetsAsync(plan, installRoot, resolver, metadataClient, cancellationToken);
-            if (!string.IsNullOrWhiteSpace(plan.WarningMessage))
-            {
-                standardOut.WriteLine(plan.WarningMessage);
-            }
-
-            var remover = _removerFactory(standardOut, options.Verbose);
-            RemovalResult result;
-
-            try
-            {
-                result = remover.Remove(plan, installRoot, options.DryRun, cancellationToken);
-            }
-            catch (RemovalRequiresElevationException) when (!options.DryRun && _removalElevationManager.CanRetryAsAdministrator)
-            {
-                if (!_removalElevationManager.TryRunElevatedRemove(standardOut, options.Verbose, out var exitCode, out var failureReason))
-                {
-                    standardError.WriteLine($"Failed to relaunch removal with administrator privileges: {failureReason}");
-                    return 1;
-                }
-
-                return exitCode;
-            }
-
-            standardOut.WriteLine(result.DryRun
-                ? $"Removal dry-run complete: {result.MatchedPaths.Count} path(s) would be removed for version {result.RequestedVersion} under {result.InstallRoot}"
-                : $"Removal finished successfully: removed {result.MatchedPaths.Count} path(s) for version {result.RequestedVersion} under {result.InstallRoot}");
-            return 0;
+            return await ExecuteRemovalOperationAsync(options, standardOut, standardError, cancellationToken);
         }
         catch (InstallException ex)
         {
@@ -240,6 +211,55 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
             standardError.WriteLine("Operation cancelled.");
             return 1;
         }
+    }
+
+    internal async Task<int> ExecuteRemovalOperationAsync(
+        RemoveOptions options,
+        TextWriter standardOut,
+        TextWriter standardError,
+        CancellationToken cancellationToken,
+        IReleaseMetadataClient? metadataClient = null,
+        RemovalVersionResolver? resolver = null,
+        bool allowElevationRetry = true,
+        bool writeSummary = true)
+    {
+        var installRoot = InstallEnvironment.ResolveInstallRoot(options.InstallDir ?? "<auto>");
+        var effectiveResolver = resolver ?? new RemovalVersionResolver();
+        using var metadataHttpClient = metadataClient is null ? RemovalVersionResolver.CreateMetadataHttpClient() : null;
+        var effectiveMetadataClient = metadataClient ?? new ReleaseMetadataClient(metadataHttpClient!);
+        var plan = await effectiveResolver.ResolveAsync(options.Version, options.SdkOnly, installRoot, effectiveMetadataClient, cancellationToken);
+        plan = await FilterSharedTargetsAsync(plan, installRoot, effectiveResolver, effectiveMetadataClient, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(plan.WarningMessage))
+        {
+            standardOut.WriteLine(plan.WarningMessage);
+        }
+
+        var remover = _removerFactory(standardOut, options.Verbose);
+        RemovalResult result;
+
+        try
+        {
+            result = remover.Remove(plan, installRoot, options.DryRun, cancellationToken);
+        }
+        catch (RemovalRequiresElevationException) when (allowElevationRetry && !options.DryRun && _removalElevationManager.CanRetryAsAdministrator)
+        {
+            if (!_removalElevationManager.TryRunElevatedRemove(standardOut, options.Verbose, out var exitCode, out var failureReason))
+            {
+                standardError.WriteLine($"Failed to relaunch removal with administrator privileges: {failureReason}");
+                return 1;
+            }
+
+            return exitCode;
+        }
+
+        if (writeSummary)
+        {
+            standardOut.WriteLine(result.DryRun
+                ? $"Removal dry-run complete: {result.MatchedPaths.Count} path(s) would be removed for version {result.RequestedVersion} under {result.InstallRoot}"
+                : $"Removal finished successfully: removed {result.MatchedPaths.Count} path(s) for version {result.RequestedVersion} under {result.InstallRoot}");
+        }
+
+        return 0;
     }
 
     private static HttpClient CreateHttpClient(InstallOptions options)
