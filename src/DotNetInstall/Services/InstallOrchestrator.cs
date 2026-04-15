@@ -88,72 +88,85 @@ internal sealed class InstallOrchestrator : IInstallOrchestrator
             var installOptions = UpdatePlanner.CreateInstallOptions(options);
             using var httpClient = CreateHttpClient(installOptions);
             var metadataClient = new ReleaseMetadataClient(httpClient);
-            var updatePlan = await UpdatePlanner.BuildAsync(options, metadataClient, cancellationToken);
-
-            WriteUpgradePlan(updatePlan, options, standardOut);
-
-            if (options.DryRun)
-            {
-                return 0;
-            }
-
-            if (updatePlan.InstallRequired)
-            {
-                var shouldUpdatePath = InstallEnvironment.ShouldUpdatePathForInstall(updatePlan.InstallRoot);
-                var installExitCode = await ExecuteInstallPlanAsync(
-                    updatePlan.InstallPlan,
-                    installOptions,
-                    updatePlan.InstallRoot,
-                    shouldUpdatePath,
-                    httpClient,
-                    standardOut,
-                    standardError,
-                    cancellationToken);
-                if (installExitCode != 0)
-                {
-                    return installExitCode;
-                }
-            }
-            else
-            {
-                standardOut.WriteLine($"Skipping installation because {InstallVerifier.GetAssetDisplayName(updatePlan.ProductKind)} version '{updatePlan.ResolvedVersion}' is already installed.");
-            }
-
-            if (updatePlan.ObsoleteVersions.Count == 0)
-            {
-                standardOut.WriteLine("No obsolete versions were found to remove.");
-                standardOut.WriteLine($"Upgrade finished successfully: {updatePlan.ProductKind} {updatePlan.ResolvedVersion}");
-                return 0;
-            }
-
-            var resolver = new RemovalVersionResolver();
-
-            foreach (var obsoleteVersion in updatePlan.ObsoleteVersions)
+            for (var i = 0; i < options.Versions.Count; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                standardOut.WriteLine($"Removing obsolete {InstallVerifier.GetAssetDisplayName(updatePlan.ProductKind)} version '{obsoleteVersion}'.");
-                var exitCode = await ExecuteRemovalOperationAsync(
-                    new RemoveOptions(
-                        obsoleteVersion,
-                        updatePlan.InstallRoot,
-                        options.SdkOnly,
-                        DryRun: false,
-                        Verbose: false),
-                    standardOut,
-                    standardError,
-                    cancellationToken,
-                    metadataClient,
-                    resolver,
-                    allowElevationRetry: false,
-                    writeSummary: false);
-                if (exitCode != 0)
+                if (i > 0)
                 {
-                    return exitCode;
+                    standardOut.WriteLine();
                 }
-            }
 
-            standardOut.WriteLine($"Upgrade finished successfully: {updatePlan.ProductKind} {updatePlan.ResolvedVersion}");
+                var updatePlan = await UpdatePlanner.BuildAsync(
+                    options with { Versions = [options.Versions[i]] },
+                    metadataClient,
+                    cancellationToken);
+
+                WriteUpgradePlan(updatePlan, options, standardOut);
+
+                if (options.DryRun)
+                {
+                    continue;
+                }
+
+                if (updatePlan.InstallRequired)
+                {
+                    var shouldUpdatePath = InstallEnvironment.ShouldUpdatePathForInstall(updatePlan.InstallRoot);
+                    var installExitCode = await ExecuteInstallPlanAsync(
+                        updatePlan.InstallPlan,
+                        installOptions with { Version = updatePlan.RequestedVersion },
+                        updatePlan.InstallRoot,
+                        shouldUpdatePath,
+                        httpClient,
+                        standardOut,
+                        standardError,
+                        cancellationToken);
+                    if (installExitCode != 0)
+                    {
+                        return installExitCode;
+                    }
+                }
+                else
+                {
+                    standardOut.WriteLine($"Skipping installation because {InstallVerifier.GetAssetDisplayName(updatePlan.ProductKind)} version '{updatePlan.ResolvedVersion}' is already installed.");
+                }
+
+                if (updatePlan.ObsoleteVersions.Count == 0)
+                {
+                    standardOut.WriteLine("No obsolete versions were found to remove.");
+                    standardOut.WriteLine($"Upgrade finished successfully: {updatePlan.ProductKind} {updatePlan.ResolvedVersion}");
+                    continue;
+                }
+
+                var resolver = new RemovalVersionResolver();
+
+                foreach (var obsoleteVersion in updatePlan.ObsoleteVersions)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    standardOut.WriteLine($"Removing obsolete {InstallVerifier.GetAssetDisplayName(updatePlan.ProductKind)} version '{obsoleteVersion}'.");
+                    var exitCode = await ExecuteRemovalOperationAsync(
+                        new RemoveOptions(
+                            obsoleteVersion,
+                            updatePlan.InstallRoot,
+                            options.SdkOnly,
+                            DryRun: false,
+                            Verbose: false),
+                        standardOut,
+                        standardError,
+                        cancellationToken,
+                        metadataClient,
+                        resolver,
+                        allowElevationRetry: false,
+                        writeSummary: false);
+                    if (exitCode != 0)
+                    {
+                        return exitCode;
+                    }
+                }
+
+                standardOut.WriteLine($"Upgrade finished successfully: {updatePlan.ProductKind} {updatePlan.ResolvedVersion}");
+            }
             return 0;
         }
         catch (InstallException ex)

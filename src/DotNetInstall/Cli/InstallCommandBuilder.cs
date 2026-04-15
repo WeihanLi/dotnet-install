@@ -141,10 +141,10 @@ internal static class InstallCommandBuilder
         {
             var upgradeCommand = new Command("upgrade", "Install the requested SDK/runtime version and remove obsolete versions in the same channel");
 
-            var versionArgument = new Argument<string>("version")
+            var versionArgument = new Argument<string[]>("version")
             {
-                Description = "SDK or runtime version to upgrade to",
-                Arity = ArgumentArity.ExactlyOne
+                Description = "One or more SDK or runtime versions to upgrade to",
+                Arity = ArgumentArity.OneOrMore
             };
 
             var updateRuntimeOption = CreateBoolOption("--runtime", "Upgrade only the .NET runtime");
@@ -161,9 +161,9 @@ internal static class InstallCommandBuilder
             upgradeCommand.Validators.Add(result =>
             {
                 var versionValue = result.GetValue(versionArgument);
-                if (string.IsNullOrWhiteSpace(versionValue))
+                if (versionValue is null || versionValue.Length == 0 || versionValue.Any(string.IsNullOrWhiteSpace))
                 {
-                    result.AddError("A version argument is required when upgrading an SDK/runtime.");
+                    result.AddError("At least one version argument is required when upgrading an SDK/runtime.");
                 }
 
                 if (result.GetValue(updateRuntimeOption) && result.GetValue(updateSdkOnlyOption))

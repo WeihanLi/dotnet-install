@@ -81,6 +81,9 @@ dotnet-install --version 10.0.x
 # Upgrade an installed SDK band and remove obsolete versions in that channel
 dotnet-install upgrade 10.0.x --dry-run
 
+# Upgrade multiple SDK bands in one command
+dotnet-install upgrade 10.0.x 11.0.x
+
 # Update the dotnet-install executable itself from GitHub releases
 dotnet-install self-update --dry-run
 ```
@@ -150,6 +153,12 @@ Preview an SDK upgrade before installing/removing anything:
 
 ```sh
 dotnet-install upgrade 10.0.x --dry-run
+```
+
+Upgrade multiple SDK bands in one command:
+
+```sh
+dotnet-install upgrade 10.0.x 11.0.x
 ```
 
 Upgrade an SDK and keep the related runtime installed:
@@ -291,7 +300,7 @@ The `remove` subcommand currently accepts:
 
 The `upgrade` subcommand currently accepts:
 
-- A required `<version>` argument such as `10.0.201` or `10.0.x`
+- One or more required `<version>` arguments such as `10.0.201`, `10.0.x`, or `10.0.x 11.0.x`
 - `--runtime` to upgrade only the .NET runtime
 - `--sdk-only` to keep the related runtime when upgrading an SDK
 - `--install-dir`

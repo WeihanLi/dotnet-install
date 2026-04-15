@@ -231,11 +231,21 @@ public sealed class InstallCommandBuilderTests
         Assert.Empty(_orchestrator.InstallCalls);
         Assert.Empty(_orchestrator.RemoveCalls);
         var updateOpts = Assert.Single(_orchestrator.UpdateCalls);
-        Assert.Equal("10.0.x", updateOpts.Version);
+        Assert.Equal(["10.0.x"], updateOpts.Versions);
         Assert.False(updateOpts.Runtime);
         Assert.False(updateOpts.SdkOnly);
         Assert.False(updateOpts.DryRun);
         Assert.Equal("<auto>", updateOpts.InstallDir);
+    }
+
+    [Fact]
+    public async Task UpgradeSubcommand_WithMultipleVersions_InvokesSingleUpdateCallWithAllVersions()
+    {
+        var root = BuildRoot();
+        await InvokeAsync(root, ["upgrade", "10.0.x", "11.0.x"]);
+
+        var updateOpts = Assert.Single(_orchestrator.UpdateCalls);
+        Assert.Equal(["10.0.x", "11.0.x"], updateOpts.Versions);
     }
 
     [Fact]

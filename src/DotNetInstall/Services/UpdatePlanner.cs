@@ -34,7 +34,7 @@ internal static class UpdatePlanner
             .ToList();
 
         return new UpdatePlan(
-            options.Version,
+            options.Versions[0],
             installPlan.ProductVersion,
             installPlan.ProductKind,
             installPlan.ChannelVersion,
@@ -120,7 +120,7 @@ internal static class UpdatePlanner
         new(
             Channel: "LTS",
             Quality: null,
-            Version: options.Version,
+            Version: options.Versions[0],
             Internal: false,
             GlobalJsonFile: null,
             InstallDir: options.InstallDir,

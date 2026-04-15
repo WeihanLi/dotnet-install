@@ -27,6 +27,7 @@ dotnet-install version
 dotnet-install --dry-run --channel LTS
 dotnet-install --version 10.0.x
 dotnet-install upgrade 10.0.x --dry-run
+dotnet-install upgrade 10.0.x 11.0.x
 dotnet-install self-update --dry-run
 ```
 
@@ -66,6 +67,12 @@ Preview an upgrade before installing/removing anything:
 
 ```bash
 dotnet-install upgrade 10.0.x --dry-run
+```
+
+Upgrade multiple SDK bands in one command:
+
+```bash
+dotnet-install upgrade 10.0.x 11.0.x
 ```
 
 Upgrade an SDK but keep its related runtime packs and shared runtime:
