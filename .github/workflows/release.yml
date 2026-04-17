@@ -145,7 +145,6 @@ jobs:
         run: |
           apk add --no-cache git
           git clone --depth 1 --branch ${{ github.ref_name }} https://github.com/${{ github.repository }}.git .
-          cd ./dotnet-install
 
       - name: Resolve release version
         shell: sh
