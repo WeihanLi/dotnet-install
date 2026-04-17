@@ -26,10 +26,6 @@ jobs:
             rid: linux-x64
           - os: ubuntu-24.04-arm
             rid: linux-arm64
-          - os: ubuntu-latest
-            rid: linux-musl-x64
-          - os: ubuntu-24.04-arm
-            rid: linux-musl-arm64
           - os: windows-latest
             rid: win-x64
           - os: windows-11-arm
@@ -76,10 +72,6 @@ jobs:
       - name: Test
         run: dotnet test DotNetInstall.slnx -c Release --no-build
 
-      - name: Install native toolchain
-        if: matrix.rid == 'linux-musl-x64' || matrix.rid == 'linux-musl-arm64'
-        run: sudo apt-get update && sudo apt-get install -y musl-dev
-
       - name: Publish
         run: >-
           dotnet publish src/DotNetInstall/DotNetInstall.csproj
@@ -117,6 +109,113 @@ jobs:
           $hash = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  $artifactName" | Set-Content -LiteralPath "$artifactPath.sha256" -NoNewline
           Write-Host "Staged $artifactPath"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: dotnet-install-${{ env.NORMALIZED_VERSION }}-${{ matrix.rid }}
+          path: artifacts/${{ matrix.rid }}/dotnet-install-${{ env.NORMALIZED_VERSION }}-${{ matrix.rid }}*
+          if-no-files-found: error
+
+      - name: Attach to GitHub release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v3
+        with:
+          files: artifacts/${{ matrix.rid }}/dotnet-install-${{ env.NORMALIZED_VERSION }}-${{ matrix.rid }}*
+
+  publish-musl:
+    name: Publish ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    container:
+      image: mcr.microsoft.com/dotnet/sdk:10.0-alpine-aot
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-musl-x64
+          - os: ubuntu-24.04-arm
+            rid: linux-musl-arm64
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+      DOTNET_MULTILEVEL_LOOKUP: '0'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Resolve release version
+        shell: sh
+        run: |
+          raw_version="${{ github.event.inputs.version || github.event.release.tag_name || github.ref_name }}"
+          raw_version="$(printf '%s' "$raw_version" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          if [ -z "$raw_version" ]; then
+            echo "A release version is required." >&2
+            exit 1
+          fi
+
+          case "$raw_version" in
+            refs/tags/*)
+              raw_version="${raw_version#refs/tags/}"
+              ;;
+          esac
+
+          normalized_version="${raw_version#v}"
+          if [ -z "$normalized_version" ]; then
+            echo "Resolved release version is empty." >&2
+            exit 1
+          fi
+
+          echo "NORMALIZED_VERSION=$normalized_version" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: dotnet build DotNetInstall.slnx -c Release -p:Version=${{ env.NORMALIZED_VERSION }}
+
+      - name: Test
+        run: dotnet test DotNetInstall.slnx -c Release --no-build
+
+      - name: Publish
+        run: >-
+          dotnet publish src/DotNetInstall/DotNetInstall.csproj
+          -c Release
+          -p:PublishAot=true
+          -p:Version=${{ env.NORMALIZED_VERSION }}
+          -p:StripSymbols=true
+          -p:InvariantGlobalization=true
+          --runtime ${{ matrix.rid }}
+          -o "${{ github.workspace }}/artifacts/${{ matrix.rid }}/publish/"
+
+      - name: Stage artifact
+        shell: sh
+        run: |
+          rid='${{ matrix.rid }}'
+          version='${{ env.NORMALIZED_VERSION }}'
+          publish_dir="${GITHUB_WORKSPACE}/artifacts/${rid}/publish"
+          if [ ! -d "$publish_dir" ]; then
+            echo "Publish directory not found: $publish_dir" >&2
+            exit 1
+          fi
+
+          binary_name='dotnet-install'
+          binary_path="${publish_dir}/${binary_name}"
+          if [ ! -f "$binary_path" ]; then
+            echo "Published binary not found: $binary_path" >&2
+            exit 1
+          fi
+
+          artifact_dir="${GITHUB_WORKSPACE}/artifacts/${rid}"
+          mkdir -p "$artifact_dir"
+          artifact_name="dotnet-install-${version}-${rid}"
+          artifact_path="${artifact_dir}/${artifact_name}"
+          cp "$binary_path" "$artifact_path"
+          hash="$(sha256sum "$artifact_path" | cut -d ' ' -f 1)"
+          printf '%s  %s' "$hash" "$artifact_name" > "${artifact_path}.sha256"
+          echo "Staged $artifact_path"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v7
