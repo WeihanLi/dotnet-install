@@ -222,6 +222,7 @@ jobs:
       - name: Upload Assets
         if: github.event_name == 'release'
         run: |
+          git config --global --add safe.directory '*'
           apk add github-cli
           gh release upload ${{ github.ref_name }} artifacts/${{ matrix.rid }}/dotnet-install-${{ env.NORMALIZED_VERSION }}-${{ matrix.rid }}*
         env:
