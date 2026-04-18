@@ -131,8 +131,10 @@ jobs:
       matrix:
         include:
           - rid: linux-musl-x64
+            container-image: 10.0-alpine-aot-amd64
             container-platform: linux/amd64
           - rid: linux-musl-arm64
+            container-image: 10.0-alpine-aot-arm64v8
             container-platform: linux/arm64
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
@@ -168,7 +170,10 @@ jobs:
 
       - name: Setup QEMU
         if: matrix.rid == 'linux-musl-arm64'
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
+      - name: Set up Docker Buildx
+        if: matrix.rid == 'linux-musl-arm64'
+        uses: docker/setup-buildx-action@v4
 
       - name: Build and publish in Alpine
         shell: sh
@@ -181,7 +186,7 @@ jobs:
             -e NORMALIZED_VERSION='${{ env.NORMALIZED_VERSION }}' \
             -v "${{ github.workspace }}:/workspace" \
             -w /workspace \
-            mcr.microsoft.com/dotnet/sdk:10.0-alpine-aot \
+            ${{ matrix.container-image }} \
             sh -lc "
               set -eu
               dotnet publish src/DotNetInstall/DotNetInstall.csproj \
