@@ -134,6 +134,8 @@ jobs:
         include:
           - os: ubuntu-latest
             rid: linux-musl-x64
+          - os: ubuntu-24.04-arm
+            rid: linux-musl-arm64
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DOTNET_NOLOGO: '1'
@@ -180,7 +182,7 @@ jobs:
           -p:StripSymbols=true
           -p:InvariantGlobalization=true
           --runtime ${{ matrix.rid }}
-          -o "${{ github.workspace }}/artifacts/${{ matrix.rid }}/publish/"
+          -o "./artifacts/${{ matrix.rid }}/publish/"
 
       - name: Stage artifact
         shell: sh
@@ -211,13 +213,16 @@ jobs:
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v7
+        if: matrix.rid != 'linux-musl-arm64' # Skip uploading musl artifact as a workflow artifact
         with:
           name: dotnet-install-${{ env.NORMALIZED_VERSION }}-${{ matrix.rid }}
           path: artifacts/${{ matrix.rid }}/dotnet-install-${{ env.NORMALIZED_VERSION }}-${{ matrix.rid }}*
           if-no-files-found: error
 
-      - name: Attach to GitHub release
+      - name: Upload Assets
         if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v3
-        with:
-          files: artifacts/${{ matrix.rid }}/dotnet-install-${{ env.NORMALIZED_VERSION }}-${{ matrix.rid }}*
+        run: |
+          apk add github-cli
+          gh release upload ${{ github.ref_name }} artifacts/${{ matrix.rid }}/dotnet-install-${{ env.NORMALIZED_VERSION }}-${{ matrix.rid }}*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
