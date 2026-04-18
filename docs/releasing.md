@@ -61,4 +61,4 @@ After the workflows complete:
 3. Verify the GitHub release is marked stable when publishing a stable version, so the GitHub Action's stable-release lookup can resolve it through the GitHub Releases API.
 4. Install from NuGet with `dotnet tool install --global spark.dotnet-install --version <version>`.
 5. Run a downloaded release binary with `dotnet-install --help`.
-6. Verify the GitHub Action from a release tag, for example `uses: WeihanLi/dotnet-install@0.1.0`, and verify local-path usage `uses: ./` if the action scripts changed.
+6. Verify the GitHub Action from a release tag, for example `uses: WeihanLi/dotnet-install@v0.2.0`, and verify local-path usage `uses: ./` if the action scripts changed.
