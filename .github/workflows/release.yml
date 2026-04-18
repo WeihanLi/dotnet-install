@@ -131,10 +131,10 @@ jobs:
       matrix:
         include:
           - rid: linux-musl-x64
-            container-image: 10.0-alpine-aot-amd64
+            container-image: mcr.microsoft.com/dotnet/sdk:10.0-alpine-aot-amd64
             container-platform: linux/amd64
           - rid: linux-musl-arm64
-            container-image: 10.0-alpine-aot-arm64v8
+            container-image: mcr.microsoft.com/dotnet/sdk:10.0-alpine-aot-arm64v8
             container-platform: linux/arm64
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
@@ -190,7 +190,6 @@ jobs:
             sh -lc "
               set -eu
               dotnet publish src/DotNetInstall/DotNetInstall.csproj \
-                -c Release \
                 -p:PublishAot=true \
                 -p:Version=\$NORMALIZED_VERSION \
                 -p:StripSymbols=true \
