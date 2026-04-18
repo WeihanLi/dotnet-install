@@ -182,14 +182,14 @@ jobs:
           -p:StripSymbols=true
           -p:InvariantGlobalization=true
           --runtime ${{ matrix.rid }}
-          -o "${{ github.workspace }}/artifacts/${{ matrix.rid }}/publish/"
+          -o "./artifacts/${{ matrix.rid }}/publish/"
 
       - name: Stage artifact
         shell: sh
         run: |
           rid='${{ matrix.rid }}'
           version='${{ env.NORMALIZED_VERSION }}'
-          publish_dir="${GITHUB_WORKSPACE}/artifacts/${rid}/publish"
+          publish_dir="./artifacts/${rid}/publish"
           if [ ! -d "$publish_dir" ]; then
             echo "Publish directory not found: $publish_dir" >&2
             exit 1
@@ -202,7 +202,7 @@ jobs:
             exit 1
           fi
 
-          artifact_dir="${GITHUB_WORKSPACE}/artifacts/${rid}"
+          artifact_dir="./artifacts/${rid}"
           mkdir -p "$artifact_dir"
           artifact_name="dotnet-install-${version}-${rid}"
           artifact_path="${artifact_dir}/${artifact_name}"
