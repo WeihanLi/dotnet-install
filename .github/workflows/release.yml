@@ -125,26 +125,22 @@ jobs:
 
   publish-musl:
     name: Publish ${{ matrix.rid }}
-    runs-on: ${{ matrix.os }}
-    container:
-      image: mcr.microsoft.com/dotnet/sdk:10.0-alpine-aot
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            rid: linux-musl-x64
-          - os: ubuntu-24.04-arm
-            rid: linux-musl-arm64
+          - rid: linux-musl-x64
+            container-platform: linux/amd64
+          - rid: linux-musl-arm64
+            container-platform: linux/arm64
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DOTNET_NOLOGO: '1'
       DOTNET_MULTILEVEL_LOOKUP: '0'
     steps:
       - name: Checkout
-        run: |
-          apk add --no-cache git
-          git clone --depth 1 --branch ${{ github.ref_name }} https://github.com/${{ github.repository }}.git .
+        uses: actions/checkout@v6
 
       - name: Resolve release version
         shell: sh
@@ -170,19 +166,33 @@ jobs:
 
           echo "NORMALIZED_VERSION=$normalized_version" >> "$GITHUB_ENV"
 
-      - name: Build
-        run: dotnet build DotNetInstall.slnx -c Release -p:Version=${{ env.NORMALIZED_VERSION }}
+      - name: Setup QEMU
+        if: matrix.rid == 'linux-musl-arm64'
+        uses: docker/setup-qemu-action@v3
 
-      - name: Publish
-        run: >-
-          dotnet publish src/DotNetInstall/DotNetInstall.csproj
-          -c Release
-          -p:PublishAot=true
-          -p:Version=${{ env.NORMALIZED_VERSION }}
-          -p:StripSymbols=true
-          -p:InvariantGlobalization=true
-          --runtime ${{ matrix.rid }}
-          -o "./artifacts/${{ matrix.rid }}/publish/"
+      - name: Build and publish in Alpine
+        shell: sh
+        run: |
+          docker run --rm \
+            --platform ${{ matrix.container-platform }} \
+            -e DOTNET_CLI_TELEMETRY_OPTOUT \
+            -e DOTNET_NOLOGO \
+            -e DOTNET_MULTILEVEL_LOOKUP \
+            -e NORMALIZED_VERSION='${{ env.NORMALIZED_VERSION }}' \
+            -v "${{ github.workspace }}:/workspace" \
+            -w /workspace \
+            mcr.microsoft.com/dotnet/sdk:10.0-alpine-aot \
+            sh -lc "
+              set -eu
+              dotnet publish src/DotNetInstall/DotNetInstall.csproj \
+                -c Release \
+                -p:PublishAot=true \
+                -p:Version=\$NORMALIZED_VERSION \
+                -p:StripSymbols=true \
+                -p:InvariantGlobalization=true \
+                --runtime ${{ matrix.rid }} \
+                -o /workspace/artifacts/${{ matrix.rid }}/publish/
+            "
 
       - name: Stage artifact
         shell: sh
