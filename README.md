@@ -91,8 +91,7 @@ dotnet-install self-update --dry-run
 dotnet-install self-update --prerelease
 ```
 
-<img width="1129" height="548" alt="image" src="https://github.com/user-attachments/assets/4de085c0-c1bf-437a-9db3-3091573d75bd" />
-
+![dotnet-install upgrade sample](https://github.com/user-attachments/assets/4de085c0-c1bf-437a-9db3-3091573d75bd)
 
 If you prefer a standalone executable instead of a .NET tool, jump to [Install The Tool](#install-the-tool).
 
