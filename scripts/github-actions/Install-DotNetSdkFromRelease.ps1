@@ -73,8 +73,9 @@ function Write-MultilineActionOutput {
 
 function Split-RequestedVersions {
     param(
-        [Parameter(Mandatory = $true)]
-        [string]$VersionText
+        [Parameter()]
+        [AllowEmptyString()]
+        [string]$VersionText = ''
     )
 
     # GitHub Actions preserves multiline inputs as a single string; split on lines and ignore blanks.

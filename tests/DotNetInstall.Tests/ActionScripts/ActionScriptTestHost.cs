@@ -37,17 +37,17 @@ internal sealed record HttpResponseDefinition(int StatusCode, string ContentType
 
 internal sealed class TestHttpServer : IDisposable
 {
-    private readonly HttpListener _listener = new();
+    private readonly TcpListener _listener;
     private readonly Dictionary<string, HttpResponseDefinition> _responses = new(StringComparer.Ordinal);
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly Task _serverTask;
 
     public TestHttpServer()
     {
-        var port = GetFreePort();
-        BaseUri = new Uri($"http://127.0.0.1:{port}/");
-        _listener.Prefixes.Add(BaseUri.AbsoluteUri);
+        _listener = new TcpListener(IPAddress.Loopback, 0);
         _listener.Start();
+        var port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+        BaseUri = new Uri($"http://127.0.0.1:{port}/");
         _serverTask = Task.Run(() => RunAsync(_cancellationTokenSource.Token));
     }
 
@@ -66,12 +66,16 @@ internal sealed class TestHttpServer : IDisposable
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            HttpListenerContext? context = null;
+            TcpClient? client = null;
             try
             {
-                context = await _listener.GetContextAsync();
+                client = await _listener.AcceptTcpClientAsync(cancellationToken);
             }
-            catch (HttpListenerException) when (cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (SocketException) when (cancellationToken.IsCancellationRequested)
             {
                 break;
             }
@@ -80,39 +84,83 @@ internal sealed class TestHttpServer : IDisposable
                 break;
             }
 
-            if (context is null)
-            {
-                continue;
-            }
-
-            var key = context.Request.RawUrl ?? "/";
-            if (!_responses.TryGetValue(key, out var response))
-            {
-                response = new HttpResponseDefinition(404, "text/plain", Encoding.UTF8.GetBytes("Not Found"));
-            }
-
-            context.Response.StatusCode = response.StatusCode;
-            context.Response.ContentType = response.ContentType;
-            context.Response.ContentLength64 = response.Body.Length;
-            await context.Response.OutputStream.WriteAsync(response.Body, cancellationToken);
-            context.Response.Close();
+            _ = Task.Run(() => HandleClientAsync(client, cancellationToken), cancellationToken);
         }
+    }
+
+    private async Task HandleClientAsync(TcpClient client, CancellationToken cancellationToken)
+    {
+        using var _ = client;
+        await using var stream = client.GetStream();
+
+        var request = await ReadRequestHeadersAsync(stream, cancellationToken);
+        var key = TryGetRequestTarget(request) ?? "/";
+        if (!_responses.TryGetValue(key, out var response))
+        {
+            response = new HttpResponseDefinition(404, "text/plain", Encoding.UTF8.GetBytes("Not Found"));
+        }
+
+        var statusText = response.StatusCode switch
+        {
+            200 => "OK",
+            404 => "Not Found",
+            _ => "Status"
+        };
+
+        var header = Encoding.ASCII.GetBytes(
+            $"HTTP/1.1 {response.StatusCode} {statusText}\r\n" +
+            $"Content-Type: {response.ContentType}\r\n" +
+            $"Content-Length: {response.Body.Length}\r\n" +
+            "Connection: close\r\n" +
+            "\r\n");
+
+        await stream.WriteAsync(header, cancellationToken);
+        await stream.WriteAsync(response.Body, cancellationToken);
+    }
+
+    private static async Task<string> ReadRequestHeadersAsync(NetworkStream stream, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[1024];
+        using var requestBytes = new MemoryStream();
+
+        while (true)
+        {
+            var bytesRead = await stream.ReadAsync(buffer, cancellationToken);
+            if (bytesRead == 0)
+            {
+                break;
+            }
+
+            requestBytes.Write(buffer, 0, bytesRead);
+            var request = Encoding.ASCII.GetString(requestBytes.GetBuffer(), 0, (int)requestBytes.Length);
+            if (request.Contains("\r\n\r\n", StringComparison.Ordinal))
+            {
+                return request;
+            }
+        }
+
+        return Encoding.ASCII.GetString(requestBytes.ToArray());
+    }
+
+    private static string? TryGetRequestTarget(string request)
+    {
+        using var reader = new StringReader(request);
+        var requestLine = reader.ReadLine();
+        if (string.IsNullOrWhiteSpace(requestLine))
+        {
+            return null;
+        }
+
+        var parts = requestLine.Split(' ', 3, StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2 ? parts[1] : null;
     }
 
     public void Dispose()
     {
         _cancellationTokenSource.Cancel();
         _listener.Stop();
-        _listener.Close();
         _serverTask.Wait(TimeSpan.FromSeconds(5));
         _cancellationTokenSource.Dispose();
-    }
-
-    private static int GetFreePort()
-    {
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 }
 
