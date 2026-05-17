@@ -40,6 +40,9 @@ Each GitHub release publishes a single-file executable per RID:
 - `dotnet-install-<version>-win-arm64.exe`
 - `dotnet-install-<version>-linux-x64`
 - `dotnet-install-<version>-linux-arm64`
+- `dotnet-install-<version>-linux-musl-x64`
+- `dotnet-install-<version>-linux-musl-arm64`
+- `dotnet-install-<version>-osx-x64`
 - `dotnet-install-<version>-osx-arm64`
 
 Download the asset that matches the target machine, place it in a directory of your choice, and run it directly. On Linux and macOS, mark it executable first:
@@ -257,6 +260,7 @@ Current behavior boundaries:
 
 - `--dry-run` stops after install plan generation
 - `--quality` can only be combined with `--version Latest`
+- `--jsonfile`, `--internal`, and `--os` are parsed compatibility switches; full shell-script parity for these switches is still in progress
 - If the requested SDK/runtime version is already installed, the command warns and asks for confirmation unless `--yes` is set
 - In CI, `--yes` defaults to `true`
 - `--persist-path` is supported only on Windows and cannot be combined with `--no-path`
@@ -274,7 +278,10 @@ The root command mirrors the install flow from the shell scripts. Frequently use
 - `--channel`
 - `--quality`
 - `--version`
+- `--internal`
+- `--jsonfile`
 - `--runtime`
+- `--shared-runtime`
 - `--install-dir`
 - `--architecture`
 - `--dry-run`
@@ -301,6 +308,8 @@ Notes:
 - Use the `version` subcommand to print the tool version
 - Exact versions such as `8.0.205` are supported, and wildcard selectors such as `8.x` and `8.0.x` resolve to the latest matching release
 - `--yes` skips the existing-install confirmation prompt
+- `--shared-runtime` is a legacy compatibility switch that maps to `--runtime dotnet`
+- `--jsonfile`, `--internal`, and `--os` are accepted by the parser but are not fully wired into install planning yet
 
 The `remove` subcommand currently accepts:
 

@@ -14,6 +14,9 @@ Select the release asset that matches the target machine:
 - `dotnet-install-<version>-win-arm64.exe`
 - `dotnet-install-<version>-linux-x64`
 - `dotnet-install-<version>-linux-arm64`
+- `dotnet-install-<version>-linux-musl-x64`
+- `dotnet-install-<version>-linux-musl-arm64`
+- `dotnet-install-<version>-osx-x64`
 - `dotnet-install-<version>-osx-arm64`
 
 The asset is the executable itself. It is not wrapped in a `.zip` or `.tar.gz`.
@@ -34,7 +37,7 @@ Each binary asset is accompanied by a `.sha256` sidecar file containing its SHA-
 
 ## Linux And macOS
 
-1. Download the asset for your RID.
+1. Download the asset for your RID. Use a `linux-musl-*` asset for Alpine or another musl-based Linux distribution.
 2. Rename it to `dotnet-install` if you want a stable local command name.
 3. Mark it executable:
 

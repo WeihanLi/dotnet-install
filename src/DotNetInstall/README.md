@@ -28,6 +28,7 @@ dotnet-install --dry-run --channel LTS
 dotnet-install --version 10.0.x
 dotnet-install upgrade 10.0.x --dry-run
 dotnet-install upgrade 10.0.x 11.0.x
+dotnet-install upgrade 10.0.x --runtime
 dotnet-install self-update --dry-run
 dotnet-install self-update --prerelease
 ```
@@ -82,6 +83,12 @@ Upgrade an SDK but keep its related runtime packs and shared runtime:
 dotnet-install upgrade 10.0.x --sdk-only
 ```
 
+Upgrade only the .NET runtime in a channel:
+
+```bash
+dotnet-install upgrade 10.0.x --runtime
+```
+
 ## Highlights
 
 - Familiar `dotnet-install` semantics in managed code
@@ -94,6 +101,7 @@ dotnet-install upgrade 10.0.x --sdk-only
 
 - `--dry-run` stops after plan generation
 - `--persist-path` is supported only on Windows and cannot be combined with `--no-path`
+- `--jsonfile`, `--internal`, and `--os` are parsed compatibility switches; full shell-script parity for these switches is still in progress
 - If another .NET installation is already discoverable, PATH mutation is skipped to avoid shadowing it
 - `remove` is destructive and should be previewed with `--dry-run` first
 - `upgrade` skips installation when the resolved version is already present and removes other installed versions in the same major.minor channel

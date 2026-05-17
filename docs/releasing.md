@@ -18,7 +18,7 @@ Publishing a GitHub release triggers:
 - `.github/workflows/release.yml` to build, test, publish native binaries, and attach release assets
 - `.github/workflows/nuget.yml` to pack and push the NuGet global-tool package
 
-For the first stable release, publish a non-prerelease GitHub release. The GitHub Action in this repository prefers the latest stable release binary for branch refs and local-path usage, and falls back to a prerelease only when no stable release exists yet.
+For stable releases, publish a non-prerelease GitHub release. The GitHub Action in this repository prefers the latest stable release binary for branch refs and local-path usage, and falls back to a prerelease only when no stable release exists yet.
 
 ## GitHub Release Outputs
 
@@ -28,9 +28,14 @@ The release workflow publishes one binary per RID:
 - `dotnet-install-<version>-win-arm64.exe`
 - `dotnet-install-<version>-linux-x64`
 - `dotnet-install-<version>-linux-arm64`
+- `dotnet-install-<version>-linux-musl-x64`
+- `dotnet-install-<version>-linux-musl-arm64`
+- `dotnet-install-<version>-osx-x64`
 - `dotnet-install-<version>-osx-arm64`
 
 Each binary also has a matching `.sha256` sidecar file.
+
+The release workflow also uploads workflow artifacts for the native RID matrix. `linux-musl-arm64` is attached to the GitHub release but is intentionally skipped as a workflow artifact.
 
 ## NuGet Output
 
