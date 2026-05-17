@@ -211,6 +211,17 @@ public sealed class InstallCommandBuilderTests
     }
 
     [Fact]
+    public async Task JsonFileOption_SetsGlobalJsonFile()
+    {
+        var root = BuildRoot();
+        await InvokeAsync(root, ["--jsonfile", "global.json"]);
+
+        var opts = Assert.Single(_orchestrator.InstallCalls);
+        Assert.NotNull(opts.GlobalJsonFile);
+        Assert.Equal("global.json", opts.GlobalJsonFile.Name);
+    }
+
+    [Fact]
     public async Task RemoveSubcommand_InvokesRemoval()
     {
         var root = BuildRoot();

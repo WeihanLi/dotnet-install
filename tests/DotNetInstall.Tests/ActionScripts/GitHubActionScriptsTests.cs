@@ -463,4 +463,101 @@ exit 0
         Assert.Contains("Requested version count=1", result.StdOut, StringComparison.Ordinal);
         Assert.Contains("Verified installed SDK '10.0.100'.", result.StdOut, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task InstallScript_GlobalJsonInput_InstallsSdkVersionFromGlobalJson()
+    {
+        using var tempDir = new TemporaryDirectory();
+        using var server = new TestHttpServer();
+        var outputPath = tempDir.GetPath("github-output.txt");
+        var envPath = tempDir.GetPath("github-env.txt");
+        var pathFile = tempDir.GetPath("github-path.txt");
+        var workspacePath = tempDir.GetPath("workspace");
+        Directory.CreateDirectory(workspacePath);
+        File.WriteAllText(outputPath, string.Empty);
+        File.WriteAllText(envPath, string.Empty);
+        File.WriteAllText(pathFile, string.Empty);
+        File.WriteAllText(tempDir.GetPath("workspace", "global.json"), """
+        {
+          "sdk": {
+            "version": "10.0.321"
+          }
+        }
+        """);
+
+        const string fakeToolName = "fake-tool.ps1";
+        var fakeToolContent = """
+param([Parameter(ValueFromRemainingArguments = $true)][string[]]$RemainingArgs)
+
+$dryRun = $false
+$globalJsonFile = $null
+$installDir = $null
+
+for ($i = 0; $i -lt $RemainingArgs.Count; $i++) {
+    switch ($RemainingArgs[$i]) {
+        '--dry-run' { $dryRun = $true }
+        '--jsonfile' { $i++; $globalJsonFile = $RemainingArgs[$i] }
+        '--install-dir' { $i++; $installDir = $RemainingArgs[$i] }
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($globalJsonFile)) {
+    throw 'Expected --jsonfile to be passed to the tool.'
+}
+
+$resolvedVersion = ((Get-Content -LiteralPath $globalJsonFile -Raw) | ConvertFrom-Json).sdk.version
+
+if ($dryRun) {
+    Write-Output "Product: Sdk $resolvedVersion | RID: win-x64 | Preview: False"
+    exit 0
+}
+
+New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $installDir 'installed-sdks.txt') -Value $resolvedVersion
+$dotnetPath = Join-Path $installDir 'dotnet.ps1'
+$dotnetScript = @'
+param([Parameter(ValueFromRemainingArguments = $true)][string[]]$RemainingArgs)
+if ($RemainingArgs.Count -gt 0 -and $RemainingArgs[0] -eq '--list-sdks') {
+    Get-Content -LiteralPath (Join-Path $PSScriptRoot 'installed-sdks.txt') | ForEach-Object { "$_ [$PSScriptRoot]" }
+    exit 0
+}
+throw "Unsupported fake dotnet command"
+'@
+Set-Content -LiteralPath $dotnetPath -Value $dotnetScript
+exit 0
+""";
+
+        var fakeToolBytes = Encoding.UTF8.GetBytes(fakeToolContent);
+        var shaFileContent = ActionScriptTestHost.CreateSha256FileContent(fakeToolBytes, fakeToolName);
+        server.AddBinary("/downloads/fake-tool.ps1", fakeToolBytes, contentType: "text/plain");
+        server.AddText("/downloads/fake-tool.ps1.sha256", shaFileContent);
+
+        var result = await ActionScriptTestHost.RunPowerShellFileAsync(
+            ActionScriptTestHost.ResolveScriptPath(@"scripts\github-actions\Install-DotNetSdkFromRelease.ps1"),
+            [
+                "-GlobalJsonFile", "global.json",
+                "-InstallDir", tempDir.GetPath("install"),
+                "-ToolPath", tempDir.GetPath("downloaded", fakeToolName),
+                "-DownloadUrl", $"{server.BaseUri}downloads/fake-tool.ps1",
+                "-Sha256Url", $"{server.BaseUri}downloads/fake-tool.ps1.sha256",
+                "-RunnerOs", "Windows"
+            ],
+            new Dictionary<string, string?>
+            {
+                ["GITHUB_OUTPUT"] = outputPath,
+                ["GITHUB_ENV"] = envPath,
+                ["GITHUB_PATH"] = pathFile,
+                ["GITHUB_WORKSPACE"] = workspacePath,
+                ["DOTNET_INSTALL_ACTION_DOTNET_EXECUTABLE_NAME"] = "dotnet.ps1",
+                ["GITHUB_TOKEN"] = string.Empty
+            });
+
+        Assert.True(
+            result.ExitCode == 0,
+            $"ExitCode={result.ExitCode}{Environment.NewLine}STDOUT:{Environment.NewLine}{result.StdOut}{Environment.NewLine}STDERR:{Environment.NewLine}{result.StdErr}");
+        var outputs = ActionScriptTestHost.ParseGitHubOutputFile(outputPath);
+        Assert.Equal("10.0.321", outputs["resolved-version"]);
+        Assert.Contains("ResolvedGlobalJsonFile=", result.StdOut, StringComparison.Ordinal);
+        Assert.Contains("Verified installed SDK '10.0.321'.", result.StdOut, StringComparison.Ordinal);
+    }
 }

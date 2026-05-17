@@ -81,6 +81,9 @@ dotnet-install --dry-run --channel LTS
 # Install the latest SDK in a feature band
 dotnet-install --version 10.0.x
 
+# Install the SDK pinned by global.json
+dotnet-install --jsonfile ./global.json
+
 # Upgrade an installed SDK band and remove obsolete versions in that channel
 dotnet-install upgrade 10.0.x --dry-run
 
@@ -126,6 +129,14 @@ Install a specific SDK exactly:
 ```sh
 dotnet-install --version 10.0.201
 ```
+
+Install the SDK pinned by `global.json`:
+
+```sh
+dotnet-install --jsonfile ./global.json
+```
+
+When `global.json` contains `sdk.rollForward`, the tool maps permissive SDK roll-forward policies to the closest supported version selector. For example, `feature` and `latestFeature` map `10.0.100` to `10.0.x`, while `minor`, `latestMinor`, `major`, and `latestMajor` map it to `10.x`.
 
 Install only a runtime:
 
@@ -232,7 +243,8 @@ jobs:
 
 Action inputs:
 
-- `version` required SDK version selector such as `10.0.201`, `10.0.x`, or a newline-delimited list of selectors
+- `version` optional SDK version selector such as `10.0.201`, `10.0.x`, or a newline-delimited list of selectors
+- `global-json-file` optional path to a `global.json` file whose `sdk.version` should be installed; cannot be combined with `version`
 - `install-dir` optional SDK install location
 
 Action outputs:
@@ -260,7 +272,8 @@ Current behavior boundaries:
 
 - `--dry-run` stops after install plan generation
 - `--quality` can only be combined with `--version Latest`
-- `--jsonfile`, `--internal`, and `--os` are parsed compatibility switches; full shell-script parity for these switches is still in progress
+- `--jsonfile` installs the SDK version pinned by `global.json`, honors SDK `rollForward` with the closest supported wildcard selector, and cannot be combined with runtime-only installs
+- `--internal` and `--os` are parsed compatibility switches; full shell-script parity for these switches is still in progress
 - If the requested SDK/runtime version is already installed, the command warns and asks for confirmation unless `--yes` is set
 - In CI, `--yes` defaults to `true`
 - `--persist-path` is supported only on Windows and cannot be combined with `--no-path`
@@ -309,7 +322,8 @@ Notes:
 - Exact versions such as `8.0.205` are supported, and wildcard selectors such as `8.x` and `8.0.x` resolve to the latest matching release
 - `--yes` skips the existing-install confirmation prompt
 - `--shared-runtime` is a legacy compatibility switch that maps to `--runtime dotnet`
-- `--jsonfile`, `--internal`, and `--os` are accepted by the parser but are not fully wired into install planning yet
+- `--jsonfile` reads `sdk.version` and compatible `sdk.rollForward` values from a `global.json` file for SDK installs
+- `--internal` and `--os` are accepted by the parser but are not fully wired into install planning yet
 
 The `remove` subcommand currently accepts:
 

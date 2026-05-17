@@ -26,6 +26,7 @@ dotnet-install --help
 dotnet-install version
 dotnet-install --dry-run --channel LTS
 dotnet-install --version 10.0.x
+dotnet-install --jsonfile ./global.json
 dotnet-install upgrade 10.0.x --dry-run
 dotnet-install upgrade 10.0.x 11.0.x
 dotnet-install upgrade 10.0.x --runtime
@@ -46,6 +47,14 @@ Install a specific SDK exactly:
 ```bash
 dotnet-install --version 10.0.201
 ```
+
+Install the SDK pinned by `global.json`:
+
+```bash
+dotnet-install --jsonfile ./global.json
+```
+
+When `global.json` contains `sdk.rollForward`, permissive policies are mapped to the closest supported wildcard selector. For example, `feature` uses `10.0.x`, and `minor` uses `10.x`.
 
 Install only a runtime:
 
@@ -101,7 +110,8 @@ dotnet-install upgrade 10.0.x --runtime
 
 - `--dry-run` stops after plan generation
 - `--persist-path` is supported only on Windows and cannot be combined with `--no-path`
-- `--jsonfile`, `--internal`, and `--os` are parsed compatibility switches; full shell-script parity for these switches is still in progress
+- `--jsonfile` installs the SDK version pinned by `global.json`, honors compatible SDK `rollForward` policies, and cannot be combined with runtime-only installs
+- `--internal` and `--os` are parsed compatibility switches; full shell-script parity for these switches is still in progress
 - If another .NET installation is already discoverable, PATH mutation is skipped to avoid shadowing it
 - `remove` is destructive and should be previewed with `--dry-run` first
 - `upgrade` skips installation when the resolved version is already present and removes other installed versions in the same major.minor channel

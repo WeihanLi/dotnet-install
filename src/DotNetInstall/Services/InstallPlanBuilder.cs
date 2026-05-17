@@ -37,6 +37,7 @@ internal static class InstallPlanBuilder
         IReleaseMetadataClient metadataClient,
         CancellationToken cancellationToken)
     {
+        options = ResolveGlobalJsonOptions(options);
         var index = await metadataClient.GetReleaseIndexAsync(cancellationToken);
         var channel = ResolveChannelEntry(index, options.Channel, options.Version);
         var releaseDocument = await metadataClient.GetChannelReleaseDocumentAsync(channel.ReleasesJsonUrl, cancellationToken);
@@ -58,6 +59,27 @@ internal static class InstallPlanBuilder
             candidateUrls,
             asset.Hash,
             IsPreviewRelease(release.ReleaseVersion));
+    }
+
+    private static InstallOptions ResolveGlobalJsonOptions(InstallOptions options)
+    {
+        if (options.GlobalJsonFile is null)
+        {
+            return options;
+        }
+
+        if (options.RequestsRuntimeOnly)
+        {
+            throw new InstallException("The --jsonfile option can only be used when installing an SDK.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.Quality))
+        {
+            throw new InstallException("The --quality and --jsonfile options cannot be combined because global.json pins an exact SDK version.");
+        }
+
+        var sdkVersion = GlobalJsonSdkResolver.ResolveSdkVersion(options.GlobalJsonFile);
+        return options with { Version = sdkVersion };
     }
 
     private static ReleaseIndexEntry ResolveChannelEntry(ReleaseIndexDocument index, string channelOption, string versionOption)

@@ -1,5 +1,6 @@
 using DotNetInstall.Options;
 using DotNetInstall.Services;
+using DotNetInstall.Tests.ActionScripts;
 
 namespace DotNetInstall.Tests.Services;
 
@@ -129,6 +130,223 @@ public sealed class InstallPlanBuilderTests
         var plan = await InstallPlanBuilder.BuildAsync(options, client, CancellationToken.None);
 
         Assert.Equal("8.0.205", plan.ProductVersion);
+    }
+
+    [Fact]
+    public async Task BuildAsync_UsesSdkVersionFromGlobalJson()
+    {
+        using var tempDir = new TemporaryDirectory();
+        var globalJsonPath = tempDir.GetPath("global.json");
+        await File.WriteAllTextAsync(globalJsonPath, """
+        {
+          "sdk": {
+            "version": "10.0.300"
+          }
+        }
+        """);
+
+        var tenChannelDocument = FakeReleaseMetadataClient.CreateSdkReleaseDocument(
+            channelVersion: "10.0",
+            releaseVersion: "10.0.5",
+            sdkVersion: "10.0.300",
+            runtimeVersion: "10.0.5");
+
+        var eightChannelDocument = FakeReleaseMetadataClient.CreateSdkReleaseDocument(
+            channelVersion: "8.0",
+            releaseVersion: "8.0.5",
+            sdkVersion: "8.0.205",
+            runtimeVersion: "8.0.5");
+
+        var client = new FakeReleaseMetadataClient(
+            new ReleaseIndexDocument(
+            [
+                new ReleaseIndexEntry(
+                    ChannelVersion: "8.0",
+                    Product: ".NET",
+                    ReleaseType: "lts",
+                    SupportPhase: "active",
+                    ReleasesJsonUrl: "https://fake.test/8.0/releases.json",
+                    LatestRelease: "8.0.5",
+                    LatestSdk: "8.0.205",
+                    LatestRuntime: "8.0.5"),
+                new ReleaseIndexEntry(
+                    ChannelVersion: "10.0",
+                    Product: ".NET",
+                    ReleaseType: "lts",
+                    SupportPhase: "active",
+                    ReleasesJsonUrl: "https://fake.test/10.0/releases.json",
+                    LatestRelease: "10.0.5",
+                    LatestSdk: "10.0.300",
+                    LatestRuntime: "10.0.5")
+            ]),
+            new Dictionary<string, ReleaseDocument>
+            {
+                ["https://fake.test/8.0/releases.json"] = eightChannelDocument,
+                ["https://fake.test/10.0/releases.json"] = tenChannelDocument
+            });
+
+        var options = DefaultOptions(channel: "8.0") with
+        {
+            GlobalJsonFile = new FileInfo(globalJsonPath)
+        };
+
+        var plan = await InstallPlanBuilder.BuildAsync(options, client, CancellationToken.None);
+
+        Assert.Equal("10.0", plan.ChannelVersion);
+        Assert.Equal("10.0.300", plan.ProductVersion);
+    }
+
+    [Theory]
+    [InlineData("feature")]
+    [InlineData("latestFeature")]
+    [InlineData("minor")]
+    [InlineData("latestMinor")]
+    [InlineData("major")]
+    [InlineData("latestMajor")]
+    public async Task BuildAsync_UsesGlobalJsonRollForward_ToResolveWildcardSdkVersion(string rollForward)
+    {
+        using var tempDir = new TemporaryDirectory();
+        var globalJsonPath = tempDir.GetPath("global.json");
+        await File.WriteAllTextAsync(globalJsonPath, $$"""
+        {
+          "sdk": {
+            "version": "10.0.100",
+            "rollForward": "{{rollForward}}"
+          }
+        }
+        """);
+
+        static ReleaseEntry CreateRelease(string releaseVersion, string releaseDate, string sdkVersion)
+        {
+            const string rid = "win-x64";
+            var sdkFile = new ReleaseFile(
+                Name: $"dotnet-sdk-{sdkVersion}-{rid}.zip",
+                Rid: rid,
+                Url: $"https://builds.dotnet.microsoft.com/dotnet/Sdk/{sdkVersion}/dotnet-sdk-{sdkVersion}-{rid}.zip",
+                Hash: null);
+
+            var runtimeFile = new ReleaseFile(
+                Name: $"dotnet-runtime-{releaseVersion}-{rid}.zip",
+                Rid: rid,
+                Url: $"https://builds.dotnet.microsoft.com/dotnet/Runtime/{releaseVersion}/dotnet-runtime-{releaseVersion}-{rid}.zip",
+                Hash: null);
+
+            var sdk = new ReleaseProduct(Version: sdkVersion, VersionDisplay: sdkVersion, Files: [sdkFile]);
+            var runtime = new ReleaseProduct(Version: releaseVersion, VersionDisplay: releaseVersion, Files: [runtimeFile]);
+
+            return new ReleaseEntry(
+                ReleaseVersion: releaseVersion,
+                ReleaseDate: releaseDate,
+                Sdk: sdk,
+                Sdks: [sdk],
+                Runtime: runtime,
+                AspNetCoreRuntime: null,
+                WindowsDesktopRuntime: null);
+        }
+
+        var releaseDocument = new ReleaseDocument(
+            ChannelVersion: "10.0",
+            ReleaseType: "lts",
+            SupportPhase: "active",
+            Releases:
+            [
+                CreateRelease("10.0.5", "2026-03-10", "10.0.300"),
+                CreateRelease("10.0.1", "2026-01-10", "10.0.100")
+            ]);
+
+        var client = FakeReleaseMetadataClient.CreateSimple("10.0", "lts", releaseDocument);
+        var options = DefaultOptions(channel: "8.0") with
+        {
+            GlobalJsonFile = new FileInfo(globalJsonPath)
+        };
+
+        var plan = await InstallPlanBuilder.BuildAsync(options, client, CancellationToken.None);
+
+        Assert.Equal("10.0.300", plan.ProductVersion);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("disable")]
+    [InlineData("patch")]
+    [InlineData("latestPatch")]
+    public async Task BuildAsync_UsesExactGlobalJsonSdkVersion_ForStrictRollForwardPolicies(string? rollForward)
+    {
+        using var tempDir = new TemporaryDirectory();
+        var globalJsonPath = tempDir.GetPath("global.json");
+        var rollForwardJson = rollForward is null ? string.Empty : $"""
+            ,
+                "rollForward": "{rollForward}"
+        """;
+        await File.WriteAllTextAsync(globalJsonPath, $$"""
+        {
+          "sdk": {
+            "version": "10.0.100"{{rollForwardJson}}
+          }
+        }
+        """);
+
+        var releaseDocument = FakeReleaseMetadataClient.CreateSdkReleaseDocument(
+            channelVersion: "10.0",
+            releaseVersion: "10.0.1",
+            sdkVersion: "10.0.100",
+            runtimeVersion: "10.0.1");
+
+        var client = FakeReleaseMetadataClient.CreateSimple("10.0", "lts", releaseDocument);
+        var options = DefaultOptions(channel: "8.0") with
+        {
+            GlobalJsonFile = new FileInfo(globalJsonPath)
+        };
+
+        var plan = await InstallPlanBuilder.BuildAsync(options, client, CancellationToken.None);
+
+        Assert.Equal("10.0.100", plan.ProductVersion);
+    }
+
+    [Fact]
+    public async Task BuildAsync_ThrowsInstallException_WhenGlobalJsonDoesNotContainSdkVersion()
+    {
+        using var tempDir = new TemporaryDirectory();
+        var globalJsonPath = tempDir.GetPath("global.json");
+        await File.WriteAllTextAsync(globalJsonPath, """{ "sdk": { "rollForward": "latestFeature" } }""");
+
+        var releaseDocument = FakeReleaseMetadataClient.CreateSdkReleaseDocument(
+            channelVersion: "8.0",
+            releaseVersion: "8.0.5",
+            sdkVersion: "8.0.205",
+            runtimeVersion: "8.0.5");
+
+        var client = FakeReleaseMetadataClient.CreateSimple("8.0", "lts", releaseDocument);
+        var options = DefaultOptions(channel: "lts") with
+        {
+            GlobalJsonFile = new FileInfo(globalJsonPath)
+        };
+
+        await Assert.ThrowsAsync<InstallException>(() =>
+            InstallPlanBuilder.BuildAsync(options, client, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task BuildAsync_ThrowsInstallException_WhenGlobalJsonIsUsedWithRuntimeInstall()
+    {
+        using var tempDir = new TemporaryDirectory();
+        var globalJsonPath = tempDir.GetPath("global.json");
+        await File.WriteAllTextAsync(globalJsonPath, """{ "sdk": { "version": "8.0.205" } }""");
+
+        var releaseDocument = FakeReleaseMetadataClient.CreateSdkReleaseDocument(
+            channelVersion: "8.0",
+            releaseVersion: "8.0.5",
+            sdkVersion: "8.0.205",
+            runtimeVersion: "8.0.5");
+
+        var client = FakeReleaseMetadataClient.CreateSimple("8.0", "lts", releaseDocument);
+        var options = DefaultOptions(channel: "lts", runtime: "dotnet") with
+        {
+            GlobalJsonFile = new FileInfo(globalJsonPath)
+        };
+
+        await Assert.ThrowsAsync<InstallException>(() =>
+            InstallPlanBuilder.BuildAsync(options, client, CancellationToken.None));
     }
 
     [Fact]

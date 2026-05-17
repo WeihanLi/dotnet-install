@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$Version,
+    [Parameter()]
+    [AllowEmptyString()]
+    [string]$Version = '',
 
     [Parameter()]
     [string]$InstallDir,

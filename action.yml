@@ -7,7 +7,12 @@ branding:
 inputs:
   version:
     description: .NET SDK version selector(s) to install, for example 10.0.201 or a newline-delimited list such as 10.0.x and 9.0.x
-    required: true
+    required: false
+    default: ''
+  global-json-file:
+    description: Path to a global.json file whose sdk.version should be installed. Cannot be combined with version.
+    required: false
+    default: ''
   install-dir:
     description: Install directory for the SDK. Defaults to a temp folder under the runner temp directory.
     required: false
@@ -59,6 +64,7 @@ runs:
       run: |
         & "${{ github.action_path }}/scripts/github-actions/Install-DotNetSdkFromRelease.ps1" `
           -RequestedVersion '${{ inputs.version }}' `
+          -GlobalJsonFile '${{ inputs.global-json-file }}' `
           -InstallDir '${{ steps.prepare.outputs.install-dir }}' `
           -ToolPath '${{ steps.prepare.outputs.tool-path }}' `
           -DownloadUrl '${{ steps.prepare.outputs.download-url }}' `

@@ -1,7 +1,12 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$RequestedVersion,
+    [Parameter()]
+    [AllowEmptyString()]
+    [string]$RequestedVersion = '',
+
+    [Parameter()]
+    [AllowEmptyString()]
+    [string]$GlobalJsonFile = '',
 
     [Parameter(Mandatory = $true)]
     [string]$InstallDir,
@@ -80,6 +85,46 @@ function Split-RequestedVersions {
     )
 }
 
+function Resolve-GlobalJsonPath {
+    param([string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return ''
+    }
+
+    if ([System.IO.Path]::IsPathRooted($Path)) {
+        return [System.IO.Path]::GetFullPath($Path)
+    }
+
+    $basePath = if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) {
+        $env:GITHUB_WORKSPACE
+    }
+    else {
+        (Get-Location).Path
+    }
+
+    return [System.IO.Path]::GetFullPath((Join-Path -Path $basePath -ChildPath $Path))
+}
+
+function New-InstallArguments {
+    param(
+        [string]$Version,
+        [string]$ResolvedGlobalJsonFile
+    )
+
+    $arguments = [System.Collections.Generic.List[string]]::new()
+    if (-not [string]::IsNullOrWhiteSpace($ResolvedGlobalJsonFile)) {
+        $arguments.Add('--jsonfile')
+        $arguments.Add($ResolvedGlobalJsonFile)
+    }
+    else {
+        $arguments.Add('--version')
+        $arguments.Add($Version)
+    }
+
+    return $arguments.ToArray()
+}
+
 function Add-EnvironmentVariable {
     param(
         [Parameter(Mandatory = $true)]
@@ -156,21 +201,19 @@ function Invoke-Tool {
 
 function Resolve-RequestedSdkVersion {
     param(
-        [Parameter(Mandatory = $true)]
-        [string]$Version
+        [string]$Version,
+        [string]$ResolvedGlobalJsonFile
     )
 
     # Resolve selectors such as `10.0.x` to the concrete SDK version before installation.
-    $dryRunOutput = Invoke-Tool -Arguments @(
-        '--dry-run',
-        '--version', $Version,
-        '--install-dir', $InstallDir,
-        '--no-path'
-    )
+    $installArguments = @(New-InstallArguments -Version $Version -ResolvedGlobalJsonFile $ResolvedGlobalJsonFile)
+    $dryRunArguments = @('--dry-run') + $installArguments + @('--install-dir', $InstallDir, '--no-path')
+    $dryRunOutput = Invoke-Tool -Arguments $dryRunArguments
 
     $resolvedVersionMatch = [regex]::Match($dryRunOutput, 'Product:\s*Sdk\s+(?<version>\S+)\s+\|')
     if (-not $resolvedVersionMatch.Success) {
-        throw "Failed to resolve the SDK version from dotnet-install dry-run output for '$Version'.`n$dryRunOutput"
+        $source = if (-not [string]::IsNullOrWhiteSpace($ResolvedGlobalJsonFile)) { $ResolvedGlobalJsonFile } else { $Version }
+        throw "Failed to resolve the SDK version from dotnet-install dry-run output for '$source'.`n$dryRunOutput"
     }
 
     return $resolvedVersionMatch.Groups['version'].Value
@@ -181,6 +224,7 @@ $toolFileName = Split-Path -Path $ToolPath -Leaf
 $shaPath = "$ToolPath.sha256"
 
 Write-Diagnostic "RequestedVersionRaw='${RequestedVersion}'"
+Write-Diagnostic "GlobalJsonFileRaw='${GlobalJsonFile}'"
 Write-Diagnostic "InstallDir='${InstallDir}'"
 Write-Diagnostic "ToolPath='${ToolPath}'"
 Write-Diagnostic "DownloadUrl='${DownloadUrl}'"
@@ -212,9 +256,25 @@ if ($actualHash -ne $expectedHash) {
     throw "SHA-256 verification failed for '$toolFileName'. Expected '$expectedHash' but got '$actualHash'."
 }
 
+$resolvedGlobalJsonFile = Resolve-GlobalJsonPath -Path $GlobalJsonFile
+if (-not [string]::IsNullOrWhiteSpace($resolvedGlobalJsonFile)) {
+    Write-Diagnostic "ResolvedGlobalJsonFile='${resolvedGlobalJsonFile}'"
+    if (-not (Test-Path -LiteralPath $resolvedGlobalJsonFile)) {
+        throw "The global.json file was not found at '$resolvedGlobalJsonFile'."
+    }
+}
+
 $requestedVersions = @(Split-RequestedVersions -VersionText $RequestedVersion)
-if ($requestedVersions.Length -eq 0) {
-    throw 'At least one SDK version must be provided.'
+if ($requestedVersions.Length -gt 0 -and -not [string]::IsNullOrWhiteSpace($resolvedGlobalJsonFile)) {
+    throw 'The version and global-json-file inputs cannot be combined.'
+}
+
+if ($requestedVersions.Length -eq 0 -and [string]::IsNullOrWhiteSpace($resolvedGlobalJsonFile)) {
+    throw 'Either a version input or a global-json-file input must be provided.'
+}
+
+if (-not [string]::IsNullOrWhiteSpace($resolvedGlobalJsonFile)) {
+    $requestedVersions = @($resolvedGlobalJsonFile)
 }
 Write-Diagnostic "Requested version count=$($requestedVersions.Length)"
 Write-Diagnostic "Requested versions='$($requestedVersions -join ', ')'"
@@ -223,7 +283,8 @@ $resolvedVersions = [System.Collections.Generic.List[string]]::new()
 $installedResolvedVersions = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
 foreach ($version in $requestedVersions) {
-    $resolvedVersion = Resolve-RequestedSdkVersion -Version $version
+    $globalJsonForRequest = if (-not [string]::IsNullOrWhiteSpace($resolvedGlobalJsonFile)) { $resolvedGlobalJsonFile } else { '' }
+    $resolvedVersion = Resolve-RequestedSdkVersion -Version $version -ResolvedGlobalJsonFile $globalJsonForRequest
     $resolvedVersions.Add($resolvedVersion)
     Write-Diagnostic "Resolved requested version '$version' to SDK '$resolvedVersion'."
 
@@ -233,12 +294,8 @@ foreach ($version in $requestedVersions) {
         continue
     }
 
-    [void](Invoke-Tool -Arguments @(
-        '--version', $version,
-        '--install-dir', $InstallDir,
-        '--no-path',
-        '--yes'
-    ))
+    $installArguments = @(New-InstallArguments -Version $version -ResolvedGlobalJsonFile $globalJsonForRequest)
+    [void](Invoke-Tool -Arguments ($installArguments + @('--install-dir', $InstallDir, '--no-path', '--yes')))
 }
 
 $dotnetExecutableName = if (-not [string]::IsNullOrWhiteSpace($env:DOTNET_INSTALL_ACTION_DOTNET_EXECUTABLE_NAME)) {
