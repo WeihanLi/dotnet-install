@@ -5,6 +5,10 @@ param(
     [string]$Version = '',
 
     [Parameter()]
+    [AllowEmptyString()]
+    [string]$DotNetVersion = '',
+
+    [Parameter()]
     [string]$InstallDir,
 
     [Parameter()]
@@ -52,6 +56,32 @@ function Write-Diagnostic {
     )
 
     Write-Host "[dotnet-install-action] $Message"
+}
+
+function Resolve-VersionInput {
+    param(
+        [Parameter()]
+        [AllowEmptyString()]
+        [string]$Version = '',
+
+        [Parameter()]
+        [AllowEmptyString()]
+        [string]$DotNetVersion = ''
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($Version) -and -not [string]::IsNullOrWhiteSpace($DotNetVersion)) {
+        if ($Version.Trim() -ne $DotNetVersion.Trim()) {
+            throw 'The version and dotnet-version inputs cannot both be set to different values.'
+        }
+
+        return $Version
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($DotNetVersion)) {
+        return $DotNetVersion
+    }
+
+    return $Version
 }
 
 function Test-IsMuslBasedLinux {
@@ -321,6 +351,7 @@ function Get-ReleaseAssetInfo {
     }
 }
 
+$requestedVersionInput = Resolve-VersionInput -Version $Version -DotNetVersion $DotNetVersion
 $runtimeIdentifier = Resolve-RuntimeIdentifier
 $isLocalAction = [string]::IsNullOrWhiteSpace($ActionRepository)
 $resolvedActionRepository = if ($isLocalAction) { $defaultActionRepository } else { $ActionRepository }
@@ -382,9 +413,11 @@ New-Item -ItemType Directory -Path $resolvedInstallDir -Force | Out-Null
 
 $toolExecutableName = if ($isWindowsRid) { 'dotnet-install.exe' } else { 'dotnet-install' }
 $toolPath = Join-Path -Path $toolDirectory -ChildPath $toolExecutableName
-$cacheKey = "dotnet-install-action|$resolvedActionRepository|$normalizedToolVersion|$runtimeIdentifier|$Version"
+$cacheKey = "dotnet-install-action|$resolvedActionRepository|$normalizedToolVersion|$runtimeIdentifier|$requestedVersionInput"
 
 Write-Diagnostic "RequestedVersionInput='${Version}'"
+Write-Diagnostic "RequestedDotNetVersionInput='${DotNetVersion}'"
+Write-Diagnostic "ResolvedVersionInput='${requestedVersionInput}'"
 Write-Diagnostic "ResolvedInstallDir='${resolvedInstallDir}'"
 Write-Diagnostic "ToolPath='${toolPath}'"
 Write-Diagnostic "DownloadUrl='${downloadUrl}'"

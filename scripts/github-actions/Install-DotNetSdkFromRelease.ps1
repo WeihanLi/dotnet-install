@@ -6,6 +6,10 @@ param(
 
     [Parameter()]
     [AllowEmptyString()]
+    [string]$DotNetVersion = '',
+
+    [Parameter()]
+    [AllowEmptyString()]
     [string]$GlobalJsonFile = '',
 
     [Parameter(Mandatory = $true)]
@@ -69,6 +73,32 @@ function Write-MultilineActionOutput {
     Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "$Name<<$marker"
     Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value $Value.TrimEnd()
     Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value $marker
+}
+
+function Resolve-VersionInput {
+    param(
+        [Parameter()]
+        [AllowEmptyString()]
+        [string]$Version = '',
+
+        [Parameter()]
+        [AllowEmptyString()]
+        [string]$DotNetVersion = ''
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($Version) -and -not [string]::IsNullOrWhiteSpace($DotNetVersion)) {
+        if ($Version.Trim() -ne $DotNetVersion.Trim()) {
+            throw 'The version and dotnet-version inputs cannot both be set to different values.'
+        }
+
+        return $Version
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($DotNetVersion)) {
+        return $DotNetVersion
+    }
+
+    return $Version
 }
 
 function Split-RequestedVersions {
@@ -225,12 +255,16 @@ $toolFileName = Split-Path -Path $ToolPath -Leaf
 $shaPath = "$ToolPath.sha256"
 
 Write-Diagnostic "RequestedVersionRaw='${RequestedVersion}'"
+Write-Diagnostic "RequestedDotNetVersionRaw='${DotNetVersion}'"
 Write-Diagnostic "GlobalJsonFileRaw='${GlobalJsonFile}'"
 Write-Diagnostic "InstallDir='${InstallDir}'"
 Write-Diagnostic "ToolPath='${ToolPath}'"
 Write-Diagnostic "DownloadUrl='${DownloadUrl}'"
 Write-Diagnostic "Sha256Url='${Sha256Url}'"
 Write-Diagnostic "RunnerOs='${RunnerOs}'"
+
+$resolvedRequestedVersion = Resolve-VersionInput -Version $RequestedVersion -DotNetVersion $DotNetVersion
+Write-Diagnostic "ResolvedRequestedVersionRaw='${resolvedRequestedVersion}'"
 
 New-Item -ItemType Directory -Path $toolDirectory -Force | Out-Null
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
@@ -265,13 +299,13 @@ if (-not [string]::IsNullOrWhiteSpace($resolvedGlobalJsonFile)) {
     }
 }
 
-$requestedVersions = @(Split-RequestedVersions -VersionText $RequestedVersion)
+$requestedVersions = @(Split-RequestedVersions -VersionText $resolvedRequestedVersion)
 if ($requestedVersions.Length -gt 0 -and -not [string]::IsNullOrWhiteSpace($resolvedGlobalJsonFile)) {
-    throw 'The version and global-json-file inputs cannot be combined.'
+    throw 'The version/dotnet-version and global-json-file inputs cannot be combined.'
 }
 
 if ($requestedVersions.Length -eq 0 -and [string]::IsNullOrWhiteSpace($resolvedGlobalJsonFile)) {
-    throw 'Either a version input or a global-json-file input must be provided.'
+    throw 'Either a version/dotnet-version input or a global-json-file input must be provided.'
 }
 
 if (-not [string]::IsNullOrWhiteSpace($resolvedGlobalJsonFile)) {

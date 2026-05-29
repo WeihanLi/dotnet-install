@@ -9,8 +9,12 @@ inputs:
     description: .NET SDK version selector(s) to install, for example 10.0.201 or a newline-delimited list such as 10.0.x and 9.0.x
     required: false
     default: ''
+  dotnet-version:
+    description: .NET SDK version selector(s) to install, alias of `version`, for example 10.0.201 or a newline-delimited list such as 10.0.x and 9.0.x
+    required: false
+    default: ''
   global-json-file:
-    description: Path to a global.json file whose sdk.version should be installed. Cannot be combined with version.
+    description: Path to a global.json file whose sdk.version should be installed. Cannot be combined with version or dotnet-version.
     required: false
     default: ''
   install-dir:
@@ -48,6 +52,7 @@ runs:
       run: |
         & "${{ github.action_path }}/scripts/github-actions/Resolve-SetupDotNetInstallAction.ps1" `
           -Version '${{ inputs.version }}' `
+          -DotNetVersion '${{ inputs.dotnet-version }}' `
           -InstallDir '${{ inputs.install-dir }}' `
           -ActionRepository $env:ACTION_REPOSITORY `
           -ActionRef $env:ACTION_REF `
@@ -64,6 +69,7 @@ runs:
       run: |
         & "${{ github.action_path }}/scripts/github-actions/Install-DotNetSdkFromRelease.ps1" `
           -RequestedVersion '${{ inputs.version }}' `
+          -DotNetVersion '${{ inputs.dotnet-version }}' `
           -GlobalJsonFile '${{ inputs.global-json-file }}' `
           -InstallDir '${{ steps.prepare.outputs.install-dir }}' `
           -ToolPath '${{ steps.prepare.outputs.tool-path }}' `

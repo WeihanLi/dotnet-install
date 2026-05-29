@@ -239,7 +239,7 @@ internal static class ActionScriptTestHost
     private static string ResolvePowerShellExecutablePath()
     {
         var candidates = OperatingSystem.IsWindows()
-            ? new[] { "pwsh.exe", "powershell.exe" }
+            ? new[] { "pwsh.exe", @"C:\Program Files\PowerShell\7\pwsh.exe", "powershell.exe" }
             : new[] { "pwsh", "powershell" };
 
         var pathEntries = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
@@ -247,6 +247,11 @@ internal static class ActionScriptTestHost
 
         foreach (var candidate in candidates)
         {
+            if (Path.IsPathRooted(candidate) && File.Exists(candidate))
+            {
+                return candidate;
+            }
+
             foreach (var entry in pathEntries)
             {
                 var fullPath = Path.Combine(entry, candidate);

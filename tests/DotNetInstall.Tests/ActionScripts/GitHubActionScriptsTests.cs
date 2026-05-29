@@ -5,6 +5,16 @@ namespace DotNetInstall.Tests.ActionScripts;
 public sealed class GitHubActionScriptsTests
 {
     [Fact]
+    public void ActionMetadata_PassesDotNetVersionInputToScripts()
+    {
+        var actionMetadata = File.ReadAllText(Path.Combine(ActionScriptTestHost.RepoRoot, "action.yml"));
+
+        Assert.Contains("-DotNetVersion '${{ inputs.dotnet-version }}'", actionMetadata, StringComparison.Ordinal);
+        Assert.Contains("-Version '${{ inputs.version }}'", actionMetadata, StringComparison.Ordinal);
+        Assert.Contains("-RequestedVersion '${{ inputs.version }}'", actionMetadata, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ResolveScript_LocalMode_FallsBackToLatestPrereleaseRelease()
     {
         using var tempDir = new TemporaryDirectory();
@@ -382,7 +392,7 @@ exit 0
     }
 
     [Fact]
-    public async Task InstallScript_SingleVersionInput_HandlesScalarSplitResult()
+    public async Task InstallScript_DotNetVersionInput_HandlesScalarSplitResult()
     {
         using var tempDir = new TemporaryDirectory();
         using var server = new TestHttpServer();
@@ -439,7 +449,7 @@ exit 0
         var result = await ActionScriptTestHost.RunPowerShellFileAsync(
             ActionScriptTestHost.ResolveScriptPath(@"scripts\github-actions\Install-DotNetSdkFromRelease.ps1"),
             [
-                "-RequestedVersion", "10.0.x",
+                "-DotNetVersion", "10.0.x",
                 "-InstallDir", tempDir.GetPath("install"),
                 "-ToolPath", tempDir.GetPath("downloaded", fakeToolName),
                 "-DownloadUrl", $"{server.BaseUri}downloads/fake-tool.ps1",
@@ -462,6 +472,41 @@ exit 0
         Assert.Equal("10.0.100", outputs["resolved-version"]);
         Assert.Contains("Requested version count=1", result.StdOut, StringComparison.Ordinal);
         Assert.Contains("Verified installed SDK '10.0.100'.", result.StdOut, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task InstallScript_ConflictingVersionInputs_ReturnsError()
+    {
+        using var tempDir = new TemporaryDirectory();
+        var outputPath = tempDir.GetPath("github-output.txt");
+        var envPath = tempDir.GetPath("github-env.txt");
+        var pathFile = tempDir.GetPath("github-path.txt");
+        File.WriteAllText(outputPath, string.Empty);
+        File.WriteAllText(envPath, string.Empty);
+        File.WriteAllText(pathFile, string.Empty);
+
+        var result = await ActionScriptTestHost.RunPowerShellFileAsync(
+            ActionScriptTestHost.ResolveScriptPath(@"scripts\github-actions\Install-DotNetSdkFromRelease.ps1"),
+            [
+                "-RequestedVersion", "10.0.x",
+                "-DotNetVersion", "9.0.x",
+                "-InstallDir", tempDir.GetPath("install"),
+                "-ToolPath", tempDir.GetPath("downloaded", "fake-tool.ps1"),
+                "-DownloadUrl", "https://example.invalid/fake-tool.ps1",
+                "-Sha256Url", "https://example.invalid/fake-tool.ps1.sha256",
+                "-RunnerOs", "Windows"
+            ],
+            new Dictionary<string, string?>
+            {
+                ["GITHUB_OUTPUT"] = outputPath,
+                ["GITHUB_ENV"] = envPath,
+                ["GITHUB_PATH"] = pathFile,
+                ["GITHUB_TOKEN"] = string.Empty
+            });
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("The version and dotnet-version inputs cannot both be set to different values.", result.StdErr, StringComparison.Ordinal);
+        Assert.DoesNotContain("Downloading", result.StdOut, StringComparison.Ordinal);
     }
 
     [Fact]

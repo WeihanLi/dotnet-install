@@ -224,7 +224,7 @@ jobs:
       - run: dotnet --info
 ```
 
-To install multiple SDK bands in one action step, pass a newline-delimited `version` value:
+To install multiple SDK bands in one action step, pass a newline-delimited `version` or `dotnet-version` value:
 
 ```yaml
 jobs:
@@ -244,7 +244,8 @@ jobs:
 Action inputs:
 
 - `version` optional SDK version selector such as `10.0.201`, `10.0.x`, or a newline-delimited list of selectors
-- `global-json-file` optional path to a `global.json` file whose `sdk.version` should be installed; cannot be combined with `version`
+- `dotnet-version` alias of `version`, provided for compatibility with `actions/setup-dotnet`
+- `global-json-file` optional path to a `global.json` file whose `sdk.version` should be installed; cannot be combined with `version` or `dotnet-version`
 - `install-dir` optional SDK install location
 
 Action outputs:
