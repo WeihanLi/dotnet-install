@@ -504,8 +504,9 @@ exit 0
                 ["GITHUB_TOKEN"] = string.Empty
             });
 
+        var processOutput = $"{result.StdOut}{Environment.NewLine}{result.StdErr}";
         Assert.NotEqual(0, result.ExitCode);
-        Assert.Contains("The version and dotnet-version inputs cannot both be set to different values.", result.StdErr, StringComparison.Ordinal);
+        Assert.Contains("The version and dotnet-version inputs cannot both be set to different values.", processOutput, StringComparison.Ordinal);
         Assert.DoesNotContain("Downloading", result.StdOut, StringComparison.Ordinal);
     }
 
