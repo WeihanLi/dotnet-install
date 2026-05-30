@@ -481,9 +481,11 @@ exit 0
         var outputPath = tempDir.GetPath("github-output.txt");
         var envPath = tempDir.GetPath("github-env.txt");
         var pathFile = tempDir.GetPath("github-path.txt");
-        File.WriteAllText(outputPath, string.Empty);
-        File.WriteAllText(envPath, string.Empty);
-        File.WriteAllText(pathFile, string.Empty);
+        await Task.WhenAll(
+            File.WriteAllTextAsync(outputPath, string.Empty),
+            File.WriteAllTextAsync(envPath, string.Empty),
+            File.WriteAllTextAsync(pathFile, string.Empty)
+        );
 
         var result = await ActionScriptTestHost.RunPowerShellFileAsync(
             ActionScriptTestHost.ResolveScriptPath(@"scripts\github-actions\Install-DotNetSdkFromRelease.ps1"),
@@ -505,6 +507,7 @@ exit 0
             });
 
         var processOutput = $"{result.StdOut}{Environment.NewLine}{result.StdErr}";
+        Console.WriteLine(processOutput);
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("The version and dotnet-version inputs cannot both be set to different values.", processOutput, StringComparison.Ordinal);
         Assert.DoesNotContain("Downloading", result.StdOut, StringComparison.Ordinal);

@@ -185,8 +185,7 @@ internal static class ActionScriptTestHost
         }
     }
 
-    public static string ResolveScriptPath(string relativePath) =>
-        System.IO.Path.Combine(RepoRoot, relativePath);
+    public static string ResolveScriptPath(string relativePath) => Path.Combine(RepoRoot, relativePath);
 
     public static async Task<ScriptProcessResult> RunPowerShellFileAsync(
         string scriptPath,
@@ -226,9 +225,14 @@ internal static class ActionScriptTestHost
 
         using var process = new Process { StartInfo = startInfo };
         process.Start();
+
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
         var stderrTask = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
+        await Task.WhenAll(
+                stdoutTask,
+                stderrTask,
+                process.WaitForExitAsync()
+                );
 
         return new ScriptProcessResult(
             process.ExitCode,
