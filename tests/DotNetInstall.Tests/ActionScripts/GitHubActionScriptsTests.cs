@@ -2,7 +2,7 @@ using System.Text;
 
 namespace DotNetInstall.Tests.ActionScripts;
 
-public sealed class GitHubActionScriptsTests(ITestoutputHelper outputHelper)
+public sealed class GitHubActionScriptsTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void ActionMetadata_PassesDotNetVersionInputToScripts()
