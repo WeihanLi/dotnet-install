@@ -2,7 +2,7 @@ using System.Text;
 
 namespace DotNetInstall.Tests.ActionScripts;
 
-public sealed class GitHubActionScriptsTests
+public sealed class GitHubActionScriptsTests(ITestoutputHelper outputHelper)
 {
     [Fact]
     public void ActionMetadata_PassesDotNetVersionInputToScripts()
@@ -507,7 +507,7 @@ exit 0
             });
 
         var processOutput = $"{result.StdOut}{Environment.NewLine}{result.StdErr}";
-        Console.WriteLine(processOutput);
+        outputHelper.WriteLine(processOutput);
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("The version and dotnet-version inputs cannot both be set to different values.", processOutput, StringComparison.Ordinal);
         Assert.DoesNotContain("Downloading", result.StdOut, StringComparison.Ordinal);
