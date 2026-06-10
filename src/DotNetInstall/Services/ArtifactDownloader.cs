@@ -12,6 +12,10 @@ internal sealed record DownloadResult(bool Success, string? DownloadPath, string
 
 internal sealed class ArtifactDownloader
 {
+    private const int DownloadBufferSize = 81920;
+    private const int ProgressPercentStep = 10;
+    private const long UnknownLengthEstimatedTotalBytes = 300L * 1024 * 1024;
+
     private readonly HttpClient _httpClient;
     private readonly TextWriter _stdout;
     private readonly TextWriter _stderr;
@@ -100,8 +104,80 @@ internal sealed class ArtifactDownloader
 
         await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
         await using var fileStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None);
-        await responseStream.CopyToAsync(fileStream, cancellationToken);
+        await CopyToFileWithProgressAsync(responseStream, fileStream, response.Content.Headers.ContentLength, cancellationToken);
         return true;
+    }
+
+    private async Task CopyToFileWithProgressAsync(
+        Stream responseStream,
+        Stream fileStream,
+        long? contentLength,
+        CancellationToken cancellationToken)
+    {
+        var totalBytes = contentLength.GetValueOrDefault();
+        var hasKnownLength = totalBytes > 0;
+        var progressTotalBytes = hasKnownLength ? totalBytes : UnknownLengthEstimatedTotalBytes;
+        var buffer = new byte[DownloadBufferSize];
+        long downloadedBytes = 0;
+        var nextPercentToReport = 0;
+
+        WriteProgress(downloadedBytes, progressTotalBytes, hasKnownLength);
+        nextPercentToReport = ProgressPercentStep;
+
+        while (true)
+        {
+            var bytesRead = await responseStream.ReadAsync(buffer, cancellationToken);
+            if (bytesRead == 0)
+            {
+                break;
+            }
+
+            await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
+            downloadedBytes += bytesRead;
+
+            var percent = (int)(downloadedBytes * 100 / progressTotalBytes);
+            if (nextPercentToReport <= 100 && percent >= nextPercentToReport)
+            {
+                WriteProgress(downloadedBytes, progressTotalBytes, hasKnownLength);
+                nextPercentToReport = ((percent / ProgressPercentStep) + 1) * ProgressPercentStep;
+            }
+        }
+
+        if (nextPercentToReport <= 100 && (downloadedBytes >= progressTotalBytes || !hasKnownLength))
+        {
+            WriteProgress(downloadedBytes, progressTotalBytes, hasKnownLength, 100);
+        }
+    }
+
+    private void WriteProgress(long downloadedBytes, long totalBytes, bool hasKnownLength, int? percentOverride = null)
+    {
+        var percent = percentOverride ?? (int)(downloadedBytes * 100 / totalBytes);
+        if (!hasKnownLength && percentOverride is null)
+        {
+            percent = Math.Min(percent, 99);
+        }
+
+        var downloadedDisplay = hasKnownLength
+            ? FormatBytes(Math.Min(downloadedBytes, totalBytes))
+            : FormatBytes(downloadedBytes);
+        var totalDisplay = hasKnownLength ? FormatBytes(totalBytes) : $"~{FormatBytes(totalBytes)}";
+        _stdout.WriteLine($"Download progress: {percent}% ({downloadedDisplay} / {totalDisplay})");
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] units = ["B", "KiB", "MiB", "GiB"];
+        var value = (double)bytes;
+        var unitIndex = 0;
+        while (value >= 1024 && unitIndex < units.Length - 1)
+        {
+            value /= 1024;
+            unitIndex++;
+        }
+
+        return unitIndex == 0
+            ? $"{bytes} {units[unitIndex]}"
+            : $"{value:0.##} {units[unitIndex]}";
     }
 
     private static async Task<bool> VerifyHashAsync(string path, string expectedHash, CancellationToken cancellationToken)

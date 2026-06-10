@@ -42,7 +42,36 @@ public sealed class ArtifactDownloaderTests : IDisposable
         Assert.Equal("https://example.invalid/dotnet-sdk.zip", result.SourceUrl);
         Assert.True(File.Exists(destinationPath));
         Assert.Equal(payload, await File.ReadAllBytesAsync(destinationPath));
+        Assert.Contains("Download progress: 0%", stdout.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Download progress: 100%", stdout.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain("Hash verification failed", stderr.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DownloadAsync_ReportsEstimatedProgress_WhenContentLengthIsUnknown()
+    {
+        var payload = Encoding.UTF8.GetBytes("unknown length payload");
+        var destinationPath = Path.Combine(_root, "dotnet-runtime.zip");
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new NonSeekableMemoryStream(payload))
+            }));
+
+        var stdout = new StringWriter();
+        var stderr = new StringWriter();
+        var downloader = new ArtifactDownloader(httpClient, stdout, stderr, verbose: false);
+
+        var result = await downloader.DownloadAsync(
+            CreatePlan(expectedHash: null),
+            CreateOptions(destinationPath),
+            CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Equal(payload, await File.ReadAllBytesAsync(destinationPath));
+        Assert.Contains("Download progress: 0% (0 B / ~300 MiB)", stdout.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Download progress: 100% (22 B / ~300 MiB)", stdout.ToString(), StringComparison.Ordinal);
+        Assert.Equal(string.Empty, stderr.ToString());
     }
 
     [Fact]
@@ -133,5 +162,15 @@ public sealed class ArtifactDownloaderTests : IDisposable
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
             Task.FromResult(_responseFactory(request));
+    }
+
+    private sealed class NonSeekableMemoryStream : MemoryStream
+    {
+        public NonSeekableMemoryStream(byte[] buffer)
+            : base(buffer)
+        {
+        }
+
+        public override bool CanSeek => false;
     }
 }
