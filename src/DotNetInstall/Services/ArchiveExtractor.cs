@@ -293,12 +293,46 @@ internal sealed class ArchiveExtractor
                 using (var fileStream = File.OpenRead(archivePath))
                 using (var archiveStream = OpenTarReadStream(fileStream, extension))
                 {
-                    TarFile.ExtractToDirectory(archiveStream, tempRoot, overwriteFiles: true);
+                    ExtractTarToDirectory(archiveStream, tempRoot);
                 }
 
                 break;
             default:
                 throw new InstallException($"Archive format '{extension}' is not supported for extraction.");
+        }
+    }
+
+    private static void ExtractTarToDirectory(Stream archiveStream, string destinationRoot)
+    {
+        // Use TarReader with TarEntry.ExtractToFile instead of TarFile.ExtractToDirectory
+        // to work around a .NET runtime bug in TarEntry.FilePathEscapesDirectory on macOS
+        // that causes an ArgumentOutOfRangeException for certain archive layouts.
+        using var reader = new TarReader(archiveStream, leaveOpen: true);
+        TarEntry? entry;
+        while ((entry = reader.GetNextEntry(copyData: true)) is not null)
+        {
+            var relativePath = NormalizeRelativePath(entry.Name);
+            if (string.IsNullOrEmpty(relativePath))
+            {
+                continue;
+            }
+
+            var destPath = GetAbsolutePath(destinationRoot, relativePath);
+
+            if (entry.EntryType == TarEntryType.Directory)
+            {
+                Directory.CreateDirectory(destPath);
+            }
+            else
+            {
+                var destDir = Path.GetDirectoryName(destPath);
+                if (!string.IsNullOrEmpty(destDir))
+                {
+                    Directory.CreateDirectory(destDir);
+                }
+
+                entry.ExtractToFile(destPath, overwrite: true);
+            }
         }
     }
 
